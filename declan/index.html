@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moto Racer</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- UI Overlays -->
+  <div id="screen-main" class="screen">
+    <h1>MOTO RACER</h1>
+    <button id="btn-race">Race</button>
+    <button id="btn-trial">Time Trial</button>
+  </div>
+
+  <div id="screen-track" class="screen hidden">
+    <h2>Select Track</h2>
+    <button class="track-btn" data-track="0">
+      <strong>Desert Highway</strong>
+      <span>Wide sweeping curves — high speed</span>
+    </button>
+    <button class="track-btn" data-track="1">
+      <strong>Jungle Circuit</strong>
+      <span>Tight corners — technical ride</span>
+    </button>
+  </div>
+
+  <div id="screen-bike" class="screen hidden">
+    <h2>Select Bike</h2>
+    <button class="bike-btn" data-bike="0">
+      <strong>Sport Bike</strong>
+      <span>Speed ●●●●○  Handling ●●○○○</span>
+    </button>
+    <button class="bike-btn" data-bike="1">
+      <strong>Dirt Bike</strong>
+      <span>Speed ●●○○○  Handling ●●●●○</span>
+    </button>
+  </div>
+
+  <div id="screen-pause" class="screen hidden">
+    <h2>PAUSED</h2>
+    <button id="btn-resume">Resume</button>
+    <button id="btn-exit-race">Exit to Main Menu</button>
+  </div>
+
+  <div id="screen-countdown" class="screen hidden">
+    <div id="countdown-text">3</div>
+  </div>
+
+  <div id="screen-results" class="screen hidden">
+    <h2 id="results-title">Race Results</h2>
+    <div id="podium"></div>
+    <div id="results-stats"></div>
+    <button id="btn-again">Play Again</button>
+    <button id="btn-menu">Main Menu</button>
+  </div>
+
+  <div id="pause-hint" class="hidden">ESC — pause &nbsp;|&nbsp; R — reset to track</div>
+
+  <script src="js/constants.js"></script>
+  <script src="js/tracks.js"></script>
+  <script src="js/bikes.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

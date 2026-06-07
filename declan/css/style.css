@@ -1,0 +1,129 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1a1a2e;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+#gameCanvas {
+  display: block;
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  background: rgba(10, 10, 30, 0.88);
+  color: #fff;
+  z-index: 10;
+}
+
+.screen.hidden { display: none; }
+
+.screen h1 {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #f0c040;
+  text-shadow: 0 2px 12px rgba(240,192,64,0.4);
+}
+
+.screen h2 { font-size: 1.8rem; color: #f0c040; }
+
+button {
+  padding: 14px 36px;
+  border: none;
+  border-radius: 50px;
+  background: #f0c040;
+  color: #1a1a2e;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.1s;
+}
+
+button:hover { background: #ffd966; transform: scale(1.04); }
+button:active { transform: scale(0.97); }
+
+.track-btn, .bike-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 260px;
+  background: #2a2a4e;
+  color: #eee;
+  border: 2px solid #f0c040;
+  border-radius: 16px;
+  padding: 18px 24px;
+}
+
+.track-btn:hover, .bike-btn:hover {
+  background: #3a3a6e;
+  transform: scale(1.03);
+}
+
+.track-btn strong, .bike-btn strong { font-size: 1.2rem; color: #f0c040; }
+.track-btn span, .bike-btn span { font-size: 0.9rem; color: #aaa; }
+
+#countdown-text {
+  font-size: 8rem;
+  font-weight: 900;
+  color: #f0c040;
+  text-shadow: 0 4px 20px rgba(240,192,64,0.6);
+}
+
+#podium {
+  display: flex;
+  gap: 16px;
+  margin: 10px 0;
+  align-items: flex-end;
+}
+
+.podium-place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #eee;
+  font-size: 0.95rem;
+}
+
+.podium-block {
+  width: 60px;
+  border-radius: 8px 8px 0 0;
+  background: #555;
+}
+
+.podium-block.gold { background: #f0c040; height: 80px; }
+.podium-block.silver { background: #aaa; height: 60px; }
+.podium-block.bronze { background: #c87533; height: 45px; }
+
+#results-stats { color: #ccc; font-size: 1rem; text-align: center; line-height: 1.8; }
+
+#screen-pause { background: rgba(10, 10, 30, 0.75); backdrop-filter: blur(4px); }
+#screen-pause h2 { font-size: 2.5rem; letter-spacing: 0.15em; }
+#btn-exit-race { background: #555; color: #eee; }
+#btn-exit-race:hover { background: #777; }
+
+#pause-hint {
+  position: fixed;
+  bottom: 14px;
+  right: 18px;
+  color: rgba(255,255,255,0.35);
+  font-size: 0.75rem;
+  font-family: system-ui, sans-serif;
+  pointer-events: none;
+  z-index: 5;
+}
