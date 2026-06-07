@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monster Truck Mayhem</title>
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <!-- All screens live in #ui as overlays. JS shows/hides them. -->
+    <div id="ui">
+
+      <!-- MAIN MENU -->
+      <section class="screen active" id="screen-menu">
+        <h1 class="logo">MONSTER TRUCK<br /><span>MAYHEM</span></h1>
+        <div class="menu-buttons">
+          <button data-action="play">Start Game</button>
+          <button data-action="freedrive">Free Drive</button>
+          <button data-action="endless">Endless Mode</button>
+          <button data-action="trucks">Truck Select</button>
+          <button data-action="settings">Mode &amp; Settings</button>
+          <button data-action="instructions">How to Play</button>
+        </div>
+        <p class="footer-note">An original toy-truck driving game. Use the arrow keys!</p>
+      </section>
+
+      <!-- TRUCK SELECT -->
+      <section class="screen" id="screen-trucks">
+        <h2>Choose Your Truck</h2>
+        <div class="truck-grid" id="truck-grid"></div>
+        <div class="row">
+          <button data-action="back">Back</button>
+          <button class="primary" data-action="confirm-truck">Choose This Truck</button>
+        </div>
+      </section>
+
+      <!-- MODE / SETTINGS -->
+      <section class="screen" id="screen-settings">
+        <h2>Mode &amp; Settings</h2>
+        <div class="settings-block">
+          <h3>Difficulty Mode</h3>
+          <div class="row">
+            <button class="mode-btn" data-mode="kid">Kid-Safe Mode</button>
+            <button class="mode-btn" data-mode="normal">Normal Mode</button>
+          </div>
+          <p class="hint" id="mode-hint"></p>
+        </div>
+        <div class="settings-block">
+          <h3>Sound</h3>
+          <button data-action="toggle-sound" id="sound-btn">Sound: ON</button>
+        </div>
+        <button data-action="back">Back</button>
+      </section>
+
+      <!-- INSTRUCTIONS -->
+      <section class="screen" id="screen-instructions">
+        <h2>How to Play</h2>
+        <ul class="controls-list">
+          <li><b>Right Arrow</b> — Accelerate</li>
+          <li><b>Left Arrow</b> — Reverse / Brake</li>
+          <li><b>Up Arrow</b> — Jump / Boost / Climb assist</li>
+          <li><b>Down Arrow</b> — Brake / Stabilize (rotate in air)</li>
+          <li><b>R</b> — Restart level</li>
+          <li><b>P</b> or <b>Esc</b> — Pause</li>
+          <li><b>M</b> — Back to main menu</li>
+        </ul>
+        <p class="hint">Collect bolts, crush toy cars, jump ramps, and reach the finish flag!</p>
+        <button data-action="back">Back</button>
+      </section>
+
+      <!-- LEVEL SELECT -->
+      <section class="screen" id="screen-levels">
+        <h2>Select a Level</h2>
+        <div class="level-grid" id="level-grid"></div>
+        <button data-action="back">Back</button>
+      </section>
+
+      <!-- PAUSE -->
+      <section class="screen" id="screen-pause">
+        <h2>Paused</h2>
+        <div class="menu-buttons">
+          <button data-action="resume">Resume</button>
+          <button data-action="restart">Restart Level</button>
+          <button data-action="to-menu">Main Menu</button>
+        </div>
+      </section>
+
+      <!-- GAME OVER / LEVEL COMPLETE -->
+      <section class="screen" id="screen-result">
+        <h2 id="result-title">Level Complete!</h2>
+        <div id="result-stats" class="result-stats"></div>
+        <div class="menu-buttons">
+          <button data-action="next-level" id="next-level-btn">Next Level</button>
+          <button data-action="restart">Restart</button>
+          <button data-action="to-menu">Main Menu</button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- IN-GAME HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-left">
+        <div>Score: <span id="hud-score">0</span></div>
+        <div>Bolts: <span id="hud-bolts">0</span></div>
+        <div id="hud-timer-wrap" class="hidden">Time: <span id="hud-timer">0</span></div>
+      </div>
+      <div class="hud-right">
+        <div id="hud-truck"></div>
+        <div id="hud-level"></div>
+        <div id="hud-damage-wrap" class="hidden">
+          Damage
+          <div class="damage-bar"><div id="hud-damage-fill"></div></div>
+        </div>
+      </div>
+      <div class="hud-hint">P: pause · R: restart · M: menu</div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
