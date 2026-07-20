@@ -15,7 +15,12 @@ export class Renderer {
   }
 
   resize() {
-    // Handle high-DPI screens crisply.
+    // Handle high-DPI screens crisply. Ignore bogus 0×0 readings (hidden or
+    // minimized window) — they'd blank the canvas until the next real resize.
+    if (!window.innerWidth || !window.innerHeight) {
+      if (!this.w) { this.w = 1280; this.h = 720; }
+      return;
+    }
     const dpr = window.devicePixelRatio || 1;
     this.w = window.innerWidth;
     this.h = window.innerHeight;

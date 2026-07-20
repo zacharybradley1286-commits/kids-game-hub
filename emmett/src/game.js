@@ -65,6 +65,7 @@ export class Game {
 
     this.paused = false;
     this.active = true;
+    this._lastTs = null;
 
     Audio.startEngine();
     this.ui.showHud(this);
@@ -82,6 +83,7 @@ export class Game {
   resume() {
     if (!this.active) return;
     this.paused = false;
+    this._lastTs = null; // don't count the paused time as one huge physics step
     this.ui.hideScreens();
     Audio.startEngine();
     this.startTime = performance.now() - this.elapsed; // keep timer continuous
@@ -100,8 +102,15 @@ export class Game {
     this.ui.hideHud();
   }
 
-  _loop() {
+  _loop(ts) {
     if (!this.active || this.paused) return;
+
+    // Frame delta normalized to 60fps units (dt=1 at 60Hz) so physics runs at
+    // the same speed on 120Hz+ displays instead of twice as fast.
+    if (this._lastTs == null) this._lastTs = ts;
+    let dt = (ts - this._lastTs) / 16.667;
+    this._lastTs = ts;
+    dt = Math.max(0.25, Math.min(3, dt || 1));
 
     // --- Endless: keep terrain generated ahead, prune behind ---
     if (this.level.endless) {
@@ -109,7 +118,7 @@ export class Game {
     }
 
     // --- Physics ---
-    const events = updateTruck(this.truck, this.level, keys, this.mode);
+    const events = updateTruck(this.truck, this.level, keys, this.mode, dt);
 
     // --- React to events ---
     for (const c of events.collected) {

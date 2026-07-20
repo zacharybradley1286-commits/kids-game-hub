@@ -72,11 +72,11 @@ export function updateTruck(truck, level, keys, mode, dt = 1) {
   // --- Auto-recover handling (kid-safe flips, or active recovery anim) ---
   if (truck.recovering > 0) {
     truck.recovering -= dt;
-    // gently lift & upright the truck
-    truck.angle = norm(truck.angle) * 0.8;
+    // gently lift & upright the truck (per-frame decay rates scaled by dt)
+    truck.angle = norm(truck.angle) * Math.pow(0.8, dt);
     const rest = groundHeightAt(level, truck.x) - RIDE_HEIGHT;
-    truck.y += (rest - 60 - truck.y) * 0.2;
-    truck.vx *= 0.8;
+    truck.y += (rest - 60 - truck.y) * (1 - Math.pow(0.8, dt));
+    truck.vx *= Math.pow(0.8, dt);
     truck.vy = 0;
     if (truck.recovering <= 0) {
       truck.y = rest;
@@ -117,18 +117,19 @@ export function updateTruck(truck, level, keys, mode, dt = 1) {
     truck.y = restY;
     truck.vy = 0;
 
-    // Align chassis to slope
+    // Align chassis to slope (lerp factor scaled by dt)
     const targetAngle = Math.atan2(gFront - gBack, truck.wheelBase);
-    truck.angle += (targetAngle - truck.angle) * (0.18 + p.grip * 0.1);
+    const alignK = 0.18 + p.grip * 0.1;
+    truck.angle += (targetAngle - truck.angle) * (1 - Math.pow(1 - alignK, dt));
     truck.angVel = 0;
 
     // Drive
     if (keys.right) truck.vx += p.accel * p.grip * dt;
     if (keys.left) truck.vx -= p.accel * 0.9 * dt; // reverse/brake
-    if (keys.down) truck.vx *= 0.9; // brake/stabilize
+    if (keys.down) truck.vx *= Math.pow(0.9, dt); // brake/stabilize
 
     // Friction + clamp
-    truck.vx *= 0.985;
+    truck.vx *= Math.pow(0.985, dt);
     const maxS = p.maxSpeed;
     if (truck.vx > maxS) truck.vx = maxS;
     if (truck.vx < -maxS * 0.5) truck.vx = -maxS * 0.5;
@@ -146,7 +147,7 @@ export function updateTruck(truck, level, keys, mode, dt = 1) {
     truck.vy += GRAVITY * dt;
     if (keys.up) truck.angVel -= 0.006 * dt;   // nose up / backflip
     if (keys.down) truck.angVel += 0.006 * dt; // nose down / stabilize
-    truck.angVel *= 0.99;
+    truck.angVel *= Math.pow(0.99, dt);
     truck.angle = norm(truck.angle + truck.angVel * dt * 16.6);
   }
 

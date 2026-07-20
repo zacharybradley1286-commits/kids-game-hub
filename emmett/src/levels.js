@@ -209,7 +209,26 @@ export function createEndlessLevel() {
 }
 
 // Extend an endless level so terrain always exists ahead of the truck.
+// Also prunes everything far behind the truck — without this the arrays grow
+// forever and groundHeightAt's linear scan slowly grinds long runs to a halt.
 export function extendEndless(level, truckX) {
+  const cut = truckX - 1500;
+  if (cut > 0) {
+    // Keep terrain[0] as the left sentinel: drop interior points behind the cut.
+    while (level.terrain.length > 2 && level.terrain[1].x < cut) {
+      level.terrain.shift();
+    }
+    if (level.obstacles.length && level.obstacles[0].x < cut) {
+      level.obstacles = level.obstacles.filter((o) => o.x >= cut);
+    }
+    if (level.collectibles.length && level.collectibles[0].x < cut) {
+      level.collectibles = level.collectibles.filter((c) => c.x >= cut);
+    }
+    if (level.ramps.length && level.ramps[0].x + level.ramps[0].w < cut) {
+      level.ramps = level.ramps.filter((r) => r.x + r.w >= cut);
+    }
+  }
+
   const target = truckX + 2000;
   while (level._genX < target) {
     const dist = level._genX;

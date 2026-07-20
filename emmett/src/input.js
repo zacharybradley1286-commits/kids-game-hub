@@ -16,10 +16,10 @@ export function onAction(name, fn) {
 
 function setKey(code, val) {
   switch (code) {
-    case "ArrowUp": keys.up = val; return true;
-    case "ArrowDown": keys.down = val; return true;
-    case "ArrowLeft": keys.left = val; return true;
-    case "ArrowRight": keys.right = val; return true;
+    case "ArrowUp": case "KeyW": case "Space": keys.up = val; return true;
+    case "ArrowDown": case "KeyS": keys.down = val; return true;
+    case "ArrowLeft": case "KeyA": keys.left = val; return true;
+    case "ArrowRight": case "KeyD": keys.right = val; return true;
     default: return false;
   }
 }

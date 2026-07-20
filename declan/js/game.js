@@ -30,13 +30,22 @@ const Game = (() => {
     const canvas = document.getElementById('gameCanvas');
     Renderer.init(canvas);
 
-    // Keyboard
+    // Keyboard — letters are lowercased so Shift/CapsLock can't break steering
+    const normKey = e => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape') { togglePause(); return; }
       if (e.key === 'r' || e.key === 'R') { resetToTrack(); return; }
-      if (e.key in keys) { keys[e.key] = true; e.preventDefault(); }
+      const k = normKey(e);
+      if (k in keys) { keys[k] = true; e.preventDefault(); }
     });
-    window.addEventListener('keyup', e => { if (e.key in keys) keys[e.key] = false; });
+    window.addEventListener('keyup', e => {
+      const k = normKey(e);
+      if (k in keys) keys[k] = false;
+    });
+    // Don't leave the throttle stuck if the window loses focus mid-race
+    window.addEventListener('blur', () => {
+      Object.keys(keys).forEach(k => { keys[k] = false; });
+    });
 
     // Menu buttons
     document.getElementById('btn-race').addEventListener('click', () => { mode = 'race'; UI.show('track'); });
@@ -218,8 +227,11 @@ const Game = (() => {
     const wpIdx = closestWaypointIndex(bike.x, bike.y, track.waypoints);
     const halfWay = Math.floor(track.waypoints.length / 2);
 
-    // Set flag once player has passed halfway around the track
-    if (wpIdx >= halfWay) hasPassedHalfway = true;
+    // Set flag only when genuinely near the far side of the track. The old
+    // `wpIdx >= halfWay` check also matched the waypoints just BEHIND the
+    // start line (indices near the end wrap around next to wp 0), so backing
+    // up a few feet and rolling forward again counted as a full lap.
+    if (Math.abs(wpIdx - halfWay) <= 2) hasPassedHalfway = true;
 
     // Detect crossing start/finish line (near waypoint 0)
     const finish = track.waypoints[0];
