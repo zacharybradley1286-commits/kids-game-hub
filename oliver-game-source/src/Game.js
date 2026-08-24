@@ -136,9 +136,10 @@ export class Game {
       this.hud.showPickup(`${mob.mobType.name} slain!`)
     }
 
-    // Passive spawner (daytime animals)
+    // Passive spawner (daytime animals) — a companion pig spawns near the
+    // player and every pig follows them around (see PassiveSpawner.js)
     this.passiveSpawner = new PassiveSpawner(
-      this.scene, this.worldData, this.inventory, this.itemRegistry
+      this.scene, this.worldData, this.inventory, this.itemRegistry, this.player
     )
 
     // Attack listener — includes all active bosses and passive mobs
