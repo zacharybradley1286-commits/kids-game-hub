@@ -1,0 +1,24 @@
+{
+  "name": "games-hub",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zacharybradley1286-commits/kids-game-hub.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/zacharybradley1286-commits/kids-game-hub/issues"
+  },
+  "homepage": "https://github.com/zacharybradley1286-commits/kids-game-hub#readme",
+  "dependencies": {
+    "@vercel/blob": "^2.8.0"
+  }
+}
