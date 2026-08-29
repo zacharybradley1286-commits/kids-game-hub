@@ -18,8 +18,9 @@ window.addEventListener('unhandledrejection', (e) => {
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFSoftShadowMap
+// Shadow map disabled: no mesh in the scene receives shadows (terrain
+// opted out — full-world shadow-casting geometry dominated frame time —
+// and nothing else receives), so the shadow pass was pure dead weight.
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 document.body.prepend(renderer.domElement)
 

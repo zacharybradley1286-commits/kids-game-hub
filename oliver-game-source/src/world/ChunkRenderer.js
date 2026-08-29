@@ -112,10 +112,12 @@ export class ChunkRenderer {
     geo.setIndex(indices)
     geo.computeBoundingBox()
 
+    // Terrain does not cast/receive dynamic shadows: with 144 chunks always
+    // resident, shadow-casting geometry at this scale dominates frame time
+    // (full-world shadow pass every frame). Fog + ambient/directional fill
+    // light keep the scene readable without it.
     this.mesh = new THREE.Mesh(geo, this.material)
     this.mesh.position.set(this.cx * CHUNK_W, 0, this.cz * CHUNK_W)
-    this.mesh.castShadow = true
-    this.mesh.receiveShadow = true
   }
 
   dispose() {

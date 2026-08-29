@@ -48,7 +48,6 @@ export class Game {
     this.scene.add(this.ambientLight)
     this.dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
     this.dirLight.position.set(30, 30, 15)
-    this.dirLight.castShadow = true
     this.scene.add(this.dirLight)
 
     // Core registries
