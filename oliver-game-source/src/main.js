@@ -41,6 +41,15 @@ Game.create(renderer).then((g) => {
   document.getElementById('loading-screen').style.display = 'none'
   document.getElementById('menu-screen').style.display = 'flex'
 
+  // The camera is constructed from window.innerWidth/innerHeight, which
+  // some embeddings (e.g. an iframe not yet laid out) can still report as
+  // 0 at that point, producing aspect = 0/0 = NaN and a degenerate
+  // projection matrix that renders nothing until a resize event happens
+  // to fire. Re-derive it here, after layout is guaranteed settled.
+  renderer.setSize(window.innerWidth, window.innerHeight)
+  game.camera.aspect = window.innerWidth / window.innerHeight
+  game.camera.updateProjectionMatrix()
+
   const clock = new THREE.Clock()
   function animate() {
     requestAnimationFrame(animate)
