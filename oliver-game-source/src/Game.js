@@ -28,7 +28,31 @@ import { SaveSystem } from './save/SaveSystem.js'
 
 const STATE = { MENU: 'menu', PLAYING: 'playing', DEAD: 'dead', WIN: 'win' }
 
+// Waits for the next painted frame — used to give the browser a chance to
+// actually render the loading screen between long synchronous build steps.
+// A bare setTimeout(0) can run before paint; double-rAF guarantees one.
+function nextPaint() {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  })
+}
+
 export class Game {
+  // Async factory: building the overworld (terrain generation + meshing
+  // ~2,300 chunks) takes several seconds of synchronous work. Awaiting a
+  // couple of nextPaint() calls around it lets the loading screen actually
+  // reach the browser's screen instead of the tab looking frozen for the
+  // whole duration. Real chunk-by-chunk incremental loading would remove
+  // the wait entirely, but this fixes the "looks hung" symptom directly.
+  static async create(renderer) {
+    const game = new Game(renderer)
+    await nextPaint()
+    game._buildOverworld()
+    await nextPaint()
+    game._finishInit()
+    return game
+  }
+
   constructor(renderer) {
     this.renderer = renderer
     this.state = STATE.MENU
@@ -53,8 +77,12 @@ export class Game {
     // Core registries
     this.itemRegistry = new ItemRegistry()
     this.recipeRegistry = new RecipeRegistry()
+  }
 
-    // World
+  // The two heaviest steps of setup (terrain generation, then meshing
+  // ~2,300 chunks) — split out so create() can yield a frame on either
+  // side and let the loading screen paint.
+  _buildOverworld() {
     this.worldData = new WorldData()
     buildIsland(this.worldData)
 
@@ -63,7 +91,10 @@ export class Game {
     this._atlasTex = atlasTex   // kept around to build the Nether's renderer lazily
 
     this.worldRenderer = new WorldRenderer(this.scene, this.worldData, atlasTex)
+  }
 
+  // Everything else: cheap to construct, doesn't need its own paint yield.
+  _finishInit() {
     // Dimensions — the Nether shares the overworld's exact size and a 1:1
     // coordinate mapping with it (see NetherWorldBuilder.js), and is only
     // generated the first time a portal is used.
@@ -92,7 +123,7 @@ export class Game {
 
     // Player controller
     this.player = new PlayerController(
-      this.camera, renderer, this.worldData, this.worldRenderer,
+      this.camera, this.renderer, this.worldData, this.worldRenderer,
       this.stats, this.inventory, this.miningSystem, this.farmingSystem,
       this.hotbar, this.hud, this.itemRegistry
     )

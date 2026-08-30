@@ -26,31 +26,37 @@ document.body.prepend(renderer.domElement)
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight)
+  // game is undefined until Game.create() resolves — the async world build
+  // now takes several seconds, so a resize during that window (or even the
+  // initial layout pass) can fire before game exists.
+  if (!game) return
   game.camera.aspect = window.innerWidth / window.innerHeight
   game.camera.updateProjectionMatrix()
 })
 
 let game
-try {
-  game = new Game(renderer)
+Game.create(renderer).then((g) => {
+  game = g
   window.__game__ = game
-} catch (e) {
+  document.getElementById('loading-screen').style.display = 'none'
+  document.getElementById('menu-screen').style.display = 'flex'
+
+  const clock = new THREE.Clock()
+  function animate() {
+    requestAnimationFrame(animate)
+    const dt = Math.min(clock.getDelta(), 0.1)
+    try {
+      game.update(dt)
+    } catch (e) {
+      console.error('Update error:', e)
+    }
+    renderer.render(game.scene, game.camera)
+  }
+  animate()
+}).catch((e) => {
   const el = document.createElement('div')
   el.style.cssText = 'position:fixed;top:50px;left:0;right:0;background:#c0392b;color:#fff;padding:16px;font:13px monospace;z-index:9999;white-space:pre-wrap;'
   el.textContent = `GAME INIT ERROR:\n${e.stack || e.message}`
   document.body.appendChild(el)
   throw e
-}
-
-const clock = new THREE.Clock()
-function animate() {
-  requestAnimationFrame(animate)
-  const dt = Math.min(clock.getDelta(), 0.1)
-  try {
-    game.update(dt)
-  } catch (e) {
-    console.error('Update error:', e)
-  }
-  renderer.render(game.scene, game.camera)
-}
-animate()
+})
