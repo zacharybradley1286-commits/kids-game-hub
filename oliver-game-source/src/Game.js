@@ -22,38 +22,16 @@ import { BossMountain } from './bosses/BossMountain.js'
 import { FinalBoss } from './bosses/FinalBoss.js'
 import { HUD } from './ui/HUD.js'
 import { Hotbar } from './ui/Hotbar.js'
-import { MiniMap } from './ui/MiniMap.js'
 import { InventoryUI } from './ui/InventoryUI.js'
+import { Minimap } from './ui/Minimap.js'
 import { CraftingUI } from './crafting/CraftingUI.js'
+import { DroppedItemManager } from './items/DroppedItemManager.js'
+import { SeaLifeSpawner } from './mobs/SeaLifeSpawner.js'
 import { SaveSystem } from './save/SaveSystem.js'
 
 const STATE = { MENU: 'menu', PLAYING: 'playing', DEAD: 'dead', WIN: 'win' }
 
-// Waits for the next painted frame — used to give the browser a chance to
-// actually render the loading screen between long synchronous build steps.
-// A bare setTimeout(0) can run before paint; double-rAF guarantees one.
-function nextPaint() {
-  return new Promise(resolve => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve))
-  })
-}
-
 export class Game {
-  // Async factory: building the overworld (terrain generation + meshing
-  // ~2,300 chunks) takes several seconds of synchronous work. Awaiting a
-  // couple of nextPaint() calls around it lets the loading screen actually
-  // reach the browser's screen instead of the tab looking frozen for the
-  // whole duration. Real chunk-by-chunk incremental loading would remove
-  // the wait entirely, but this fixes the "looks hung" symptom directly.
-  static async create(renderer) {
-    const game = new Game(renderer)
-    await nextPaint()
-    game._buildOverworld()
-    await nextPaint()
-    game._finishInit()
-    return game
-  }
-
   constructor(renderer) {
     this.renderer = renderer
     this.state = STATE.MENU
@@ -73,17 +51,29 @@ export class Game {
     this.scene.add(this.ambientLight)
     this.dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
     this.dirLight.position.set(30, 30, 15)
+    this.dirLight.castShadow = true
+    // The shadow camera's frustum defaults to a tiny +/-5 box anchored at
+    // the origin — across a 768x768 world that means real shadows only
+    // ever rendered in one corner of the map, nowhere near the player.
+    // Size it to a sensible radius and re-center it on the player every
+    // frame instead (see _updateSunFollow).
+    this.dirLight.shadow.mapSize.set(2048, 2048)
+    this.dirLight.shadow.camera.near = 1
+    this.dirLight.shadow.camera.far = 110
+    this.dirLight.shadow.camera.left = -45
+    this.dirLight.shadow.camera.right = 45
+    this.dirLight.shadow.camera.top = 45
+    this.dirLight.shadow.camera.bottom = -45
+    this.dirLight.shadow.bias = -0.0015
+    this.dirLight.target = new THREE.Object3D()
+    this.scene.add(this.dirLight.target)
     this.scene.add(this.dirLight)
 
     // Core registries
     this.itemRegistry = new ItemRegistry()
     this.recipeRegistry = new RecipeRegistry()
-  }
 
-  // The two heaviest steps of setup (terrain generation, then meshing
-  // ~2,300 chunks) — split out so create() can yield a frame on either
-  // side and let the loading screen paint.
-  _buildOverworld() {
+    // World
     this.worldData = new WorldData()
     buildIsland(this.worldData)
 
@@ -92,10 +82,7 @@ export class Game {
     this._atlasTex = atlasTex   // kept around to build the Nether's renderer lazily
 
     this.worldRenderer = new WorldRenderer(this.scene, this.worldData, atlasTex)
-  }
 
-  // Everything else: cheap to construct, doesn't need its own paint yield.
-  _finishInit() {
     // Dimensions — the Nether shares the overworld's exact size and a 1:1
     // coordinate mapping with it (see NetherWorldBuilder.js), and is only
     // generated the first time a portal is used.
@@ -108,11 +95,12 @@ export class Game {
     // Player systems
     this.stats = new PlayerStats()
     this.inventory = new Inventory()
+    this.stats.linkArmorSource(this.inventory, this.itemRegistry)
 
     // UI
     this.hud = new HUD()
+    this.minimap = new Minimap(this.worldData)
     this.hotbar = new Hotbar(this.inventory, this.itemRegistry)
-    this.miniMap = new MiniMap(this.worldData, () => this._bossList)
 
     // Farming
     this.farmingSystem = new FarmingSystem(this.worldData, this.scene)
@@ -125,7 +113,7 @@ export class Game {
 
     // Player controller
     this.player = new PlayerController(
-      this.camera, this.renderer, this.worldData, this.worldRenderer,
+      this.camera, renderer, this.worldData, this.worldRenderer,
       this.stats, this.inventory, this.miningSystem, this.farmingSystem,
       this.hotbar, this.hud, this.itemRegistry
     )
@@ -174,10 +162,21 @@ export class Game {
       this.scene, this.worldData, this.inventory, this.itemRegistry, this.player
     )
 
+    // Sea life — fish and sharks confined to the ocean biome (see WorldBuilder's
+    // _addOceanBiome and SeaLifeSpawner.js)
+    this.seaLife = new SeaLifeSpawner(
+      this.scene, this.worldData, this.inventory, this.itemRegistry, this.player
+    )
+
+    // Dropped items — Q drops the held item as a walk-over pickup
+    this.droppedItems = new DroppedItemManager(this.scene, this.inventory, this.itemRegistry)
+    this.player.onDropItem = (itemId, count, pos) => this.droppedItems.spawn(itemId, count, pos)
+
     // Attack listener — includes all active bosses and passive mobs
     this.player.setupAttackListener(() => [
       ...this.mobSpawner.getMobs(),
       ...this.passiveSpawner.getMobs(),
+      ...this.seaLife.getMobs(),
       ...(this._activeBossList ?? []).filter(b => !b.dead)
     ])
 
@@ -276,7 +275,6 @@ export class Game {
     sounds.startMusic()
     this.hud.show()
     this.hotbar.show()
-    this.miniMap.show()
     this.hud.updateDay(this.dayNight.dayNumber)
     this.hud.updateHealth(this.stats.health, this.stats.maxHealth)
     this.hud.updateHunger(this.stats.hunger, this.stats.maxHunger)
@@ -293,12 +291,24 @@ export class Game {
       this.inventory.add('planks', 8, this.itemRegistry)
       this.inventory.add('stick', 8, this.itemRegistry)
       this.inventory.add('wheat_seed', 6, this.itemRegistry)
+      this.inventory.add('carrot_seed', 4, this.itemRegistry)
+      this.inventory.add('potato_seed', 4, this.itemRegistry)
       this.inventory.add('bread', 3, this.itemRegistry)
       this.inventory.add('crystal_sword', 1, this.itemRegistry)
       this.inventory.add('wooden_shovel', 1, this.itemRegistry)
       this.inventory.add('troll_fang', 1, this.itemRegistry)
       this.inventory.add('witch_eye', 1, this.itemRegistry)
       this.inventory.add('golem_core', 1, this.itemRegistry)
+
+      // Start already wearing a full set of crystal armor
+      this.inventory.armor.helmet.itemId = 'crystal_helmet'
+      this.inventory.armor.helmet.count = 1
+      this.inventory.armor.chestplate.itemId = 'crystal_chestplate'
+      this.inventory.armor.chestplate.count = 1
+      this.inventory.armor.leggings.itemId = 'crystal_leggings'
+      this.inventory.armor.leggings.count = 1
+      this.inventory.armor.boots.itemId = 'crystal_boots'
+      this.inventory.armor.boots.count = 1
     }
 
     // Lock pointer on click
@@ -317,19 +327,20 @@ export class Game {
 
     // Spawn passive animals at game start
     this.passiveSpawner.init()
+    this.seaLife.init()
 
     // Spawn the mini-bosses in their zones
     this._setupMiniBosses()
   }
 
   _setupMiniBosses() {
-    // World is 4x larger (768x768, up from 192x192) — every boss position
+    // World is 3072x3072, up from the original 192x192 — every boss position
     // below is scaled by the same factor as WorldBuilder's terrain features
-    // so they land in the right biome. The Stone Golem was also moved off
-    // the main (NW) mountain onto the second (NE) mountain — previously it
-    // shared the same corner of the map as the Cave Troll, which worked
-    // against "spread out" even before the resize.
-    const BOSS_SCALE = 4
+    // (see SCALE in WorldBuilder.js) so they land in the right biome. The
+    // Stone Golem was also moved off the main (NW) mountain onto the second
+    // (NE) mountain — previously it shared the same corner of the map as the
+    // Cave Troll, which worked against "spread out" even before the resize.
+    const BOSS_SCALE = 8
 
     // Cave Troll — underground near NW mountain
     const trollPos = new THREE.Vector3(30*BOSS_SCALE, 4, 30*BOSS_SCALE)
@@ -367,7 +378,7 @@ export class Game {
   }
 
   _spawnFinalBoss() {
-    const bossPos = new THREE.Vector3(138*4, 15, 138*4)  // same altar spot as the swamp, scaled with the map
+    const bossPos = new THREE.Vector3(138*8, 15, 138*8)  // same altar spot as the swamp, scaled with the map
     const finalBoss = new FinalBoss(bossPos, this.scene, this.player, this.inventory, this.itemRegistry, this.worldData)
     finalBoss.onWin = () => this._onWin()
     finalBoss.onDeath = () => {}
@@ -417,6 +428,8 @@ export class Game {
     this.mobSpawner._despawnAll()
     for (const { mob } of this.passiveSpawner.mobs) mob.dispose()
     this.passiveSpawner.mobs = []
+    this.seaLife.clear()
+    this.droppedItems.clear()
     for (const boss of this._activeBossList ?? []) boss.mesh.visible = (target === 'overworld')
     if (this._sun) this._sun.visible = (target === 'overworld')
     if (this._moon) this._moon.visible = (target === 'overworld')
@@ -458,6 +471,8 @@ export class Game {
     this.miningSystem.worldRenderer = this.worldRenderer
     this.farmingSystem.worldData = this.worldData
     this.mobSpawner.worldData = this.worldData
+    this.seaLife.worldData = this.worldData
+    this.minimap.setWorldData(this.worldData)
 
     // Land one cell off from the portal's own coordinates, not on top of
     // it — the portal block itself is solid (see BlockRegistry), so
@@ -526,20 +541,19 @@ export class Game {
     // during a trip and dumping a wave of night mobs on you the moment
     // you step back through the portal.
     if (this.currentDimension !== 'nether') this.dayNight.update(dt)
+    this._updateSunFollow()
     this.mobSpawner.update(dt)
     this.passiveSpawner.update(dt)
+    this.seaLife.update(dt)
     this.farmingSystem.update(dt)
+    this._updateMinimap(dt)
+    this.droppedItems.update(dt, this.camera.position)
 
     if (!this.inventoryUI.visible && !this.craftingUI.visible) {
       this.player.update(dt)
     }
     this._updateBlockOutline()
     this._updateSky(dt)
-    // Only meaningful in the overworld — the Nether shares the same
-    // WorldData instance/coordinate space (see NetherWorldBuilder) but has
-    // no bosses or portal-spawn POI to show, so it'd just draw the wrong
-    // terrain colors underneath real Nether gameplay.
-    if (this.currentDimension !== 'nether') this.miniMap.update(dt, this.camera)
 
     // Update active boss — show bar for the closest living boss within 40 blocks.
     // Bosses only exist in the overworld; skip the proximity check in the
@@ -590,6 +604,29 @@ export class Game {
     this._blockOutline = new THREE.LineSegments(geo, mat)
     this._blockOutline.visible = false
     this.scene.add(this._blockOutline)
+  }
+
+  // Re-centers the sun's shadow-casting frustum on the player each frame,
+  // preserving whatever direction DayNightCycle just set (it reassigns
+  // dirLight.position fresh every call, so that vector doubles as "the
+  // direction the sun is in" relative to the origin).
+  _updateSunFollow() {
+    if (this.dirLight.intensity <= 0) return
+    const sunDir = this.dirLight.position.clone().normalize()
+    this.dirLight.position.copy(this.camera.position).addScaledVector(sunDir, 40)
+    this.dirLight.target.position.copy(this.camera.position)
+  }
+
+  _updateMinimap(dt) {
+    const dir = new THREE.Vector3()
+    this.camera.getWorldDirection(dir)
+    const yaw = Math.atan2(dir.x, dir.z)
+    const mobs = [
+      ...this.mobSpawner.getMobs(),
+      ...this.passiveSpawner.getMobs(),
+      ...(this.currentDimension === 'nether' ? [] : this.seaLife.getMobs()),
+    ]
+    this.minimap.update(dt, this.camera.position, yaw, mobs)
   }
 
   _updateBlockOutline() {
@@ -949,6 +986,55 @@ export class Game {
     ctx.fillStyle='rgba(200,100,255,0.6)'
     for(let px2=0;px2<T;px2+=2) { ctx.fillRect(7*T+px2,2*T+(px2*3)%T,2,2) }
     ctx.fillStyle='rgba(230,180,255,0.5)'; ctx.fillRect(7*T+6,2*T+6,4,4)
+
+    // ── CORAL (8,3) ──────────────────────────────────────────────────────
+    ctx.clearRect(8*T, 3*T, T, T)
+    { const coR = mk(2601)
+      const branches = ['#ff6a8a', '#ff9a4a', '#ffcc55']
+      for (let py=0;py<T;py++) for(let px2=0;px2<T;px2++) {
+        const v = coR()
+        if (v < 0.55) {} // transparent gaps
+        else { ctx.fillStyle = branches[Math.floor(coR()*branches.length)]; ctx.fillRect(8*T+px2,3*T+py,1,1) }
+      }
+    }
+
+    // ── KELP (9,3) ───────────────────────────────────────────────────────
+    ctx.clearRect(9*T, 3*T, T, T)
+    { const kpR = mk(2701)
+      for (let py=0;py<T;py++) for(let px2=0;px2<T;px2++) {
+        const v = kpR()
+        if (v < 0.35) {} // transparent gaps
+        else if (v < 0.65) { ctx.fillStyle = '#1a5a30'; ctx.fillRect(9*T+px2,3*T+py,1,1) }
+        else { ctx.fillStyle = '#2a8a4a'; ctx.fillRect(9*T+px2,3*T+py,1,1) }
+      }
+    }
+
+    // ── TALL GRASS (10,3) ────────────────────────────────────────────────
+    ctx.clearRect(10*T, 3*T, T, T)
+    { const tgR = mk(2801)
+      const blades = ['#3a7020', '#4a8f3f', '#5da84e']
+      // A handful of tapered blade strokes rather than solid fill, so it
+      // reads as individual grass rather than a green rectangle.
+      for (let b = 0; b < 7; b++) {
+        const bx = 1 + Math.floor(tgR() * 14)
+        const lean = Math.floor(tgR() * 3) - 1
+        const height = 8 + Math.floor(tgR() * 7)
+        const color = blades[Math.floor(tgR() * blades.length)]
+        for (let y = 0; y < height; y++) {
+          const x = bx + Math.round((lean * y) / height)
+          ctx.fillStyle = color
+          ctx.fillRect(10*T + x, 3*T + (15 - y), 1, 1)
+        }
+      }
+    }
+
+    // ── FLOWER (11,3) ────────────────────────────────────────────────────
+    ctx.clearRect(11*T, 3*T, T, T)
+    tr(11,3, 7,10, 2,6, '#3a7020')  // stem
+    { const petals = [[7,3,'#ff5577'],[5,5,'#ffdd33'],[9,5,'#ffffff'],[7,7,'#ff8844']]
+      for (const [px3, py3, color] of petals) tr(11,3, px3,py3, 2,2, color)
+      dp(11,3, 7,5, '#ffee88')  // center
+    }
 
     const tex = new THREE.CanvasTexture(canvas)
     tex.magFilter = THREE.NearestFilter

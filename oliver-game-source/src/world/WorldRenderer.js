@@ -20,17 +20,16 @@ export class WorldRenderer {
     })
     this.material = mat
 
-    // Water needs alpha blending (translucent), not the alphaTest cutout
-    // the opaque terrain material uses, so it's a separate material/mesh
-    // per chunk rather than sharing this.material.
-    const waterMat = new THREE.MeshLambertMaterial({
+    // Water gets its own alpha-blended pass with depth writes off — with
+    // depthWrite on, a translucent-looking water face would still write
+    // full opaque depth like solid stone and hide anything (fish, sharks,
+    // terrain) sitting inside or behind it.
+    this.liquidMaterial = new THREE.MeshLambertMaterial({
       map: atlasTex,
       transparent: true,
-      opacity: 0.75,
       depthWrite: false,
       side: THREE.DoubleSide,
     })
-    this.waterMaterial = waterMat
 
     this.chunks = new Map()  // "cx,cz" → ChunkRenderer
 
@@ -58,13 +57,13 @@ export class WorldRenderer {
     if (existing) {
       existing.dispose()
     }
-    const renderer = new ChunkRenderer(cx, cz, this.worldData, this.material, this.waterMaterial)
+    const renderer = new ChunkRenderer(cx, cz, this.worldData, this.material, this.liquidMaterial)
     this.chunks.set(key, renderer)
     if (renderer.mesh) {
       this.group.add(renderer.mesh)
     }
-    if (renderer.waterMesh) {
-      this.group.add(renderer.waterMesh)
+    if (renderer.liquidMesh) {
+      this.group.add(renderer.liquidMesh)
     }
   }
 
@@ -73,7 +72,7 @@ export class WorldRenderer {
     const key = `${cx},${cz}`
     const old = this.chunks.get(key)
     if (old?.mesh) this.group.remove(old.mesh)
-    if (old?.waterMesh) this.group.remove(old.waterMesh)
+    if (old?.liquidMesh) this.group.remove(old.liquidMesh)
     this._buildChunk(cx, cz)
     // Also rebuild neighbors (shared face culling edge)
     const neighbors = [
@@ -84,17 +83,14 @@ export class WorldRenderer {
       const nkey = `${nx},${nz}`
       const nr = this.chunks.get(nkey)
       if (nr?.mesh) this.group.remove(nr.mesh)
-      if (nr?.waterMesh) this.group.remove(nr.waterMesh)
-      const rebuilt = new ChunkRenderer(nx, nz, this.worldData, this.material, this.waterMaterial)
+      if (nr?.liquidMesh) this.group.remove(nr.liquidMesh)
+      const rebuilt = new ChunkRenderer(nx, nz, this.worldData, this.material, this.liquidMaterial)
       this.chunks.set(nkey, rebuilt)
       if (rebuilt.mesh) this.group.add(rebuilt.mesh)
-      if (rebuilt.waterMesh) this.group.add(rebuilt.waterMesh)
+      if (rebuilt.liquidMesh) this.group.add(rebuilt.liquidMesh)
     }
   }
 
-  // Solid meshes only — this feeds the mine/place targeting raycast
-  // (PlayerController._raycastBlock), which must not be able to target
-  // water (there's nothing to mine or place a block against there).
   get allMeshes() {
     const out = []
     for (const r of this.chunks.values()) {

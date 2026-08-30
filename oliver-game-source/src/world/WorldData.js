@@ -26,11 +26,16 @@ export class WorldData {
     this.data[this._idx(x, y, z)] = blockId
   }
 
-  // Returns true if block at (x,y,z) blocks movement/vision
+  // Returns true if block at (x,y,z) blocks movement/vision. This is its
+  // own gameplay-facing list rather than a straight mirror of each
+  // BlockType's isSolid flag — LAVA is isSolid:true in BlockRegistry
+  // (so it still gets a mesh) but walkable/sinkable here for its hazard
+  // mechanic, and LEAVES is walkable despite forming a solid-looking canopy.
   isSolid(x, y, z) {
     if (!this.inBounds(x, y, z)) return false
     const bid = this.get(x, y, z)
-    return bid !== BLOCK.AIR && bid !== BLOCK.WATER && bid !== BLOCK.LEAVES && bid !== BLOCK.LAVA
+    return bid !== BLOCK.AIR && bid !== BLOCK.WATER && bid !== BLOCK.LEAVES && bid !== BLOCK.LAVA &&
+           bid !== BLOCK.TALL_GRASS && bid !== BLOCK.FLOWER && bid !== BLOCK.CORAL && bid !== BLOCK.KELP
   }
 
   // Find the topmost solid block Y at (x, z), returns -1 if none

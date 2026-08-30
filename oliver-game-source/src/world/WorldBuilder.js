@@ -1,18 +1,19 @@
 import { WORLD_W, WORLD_D, WORLD_H, SURFACE_Y, SEA_LEVEL } from '../constants.js'
 import { BLOCK } from './BlockRegistry.js'
 
-// World was quadrupled in each linear dimension (192->768, 16x area). All the
-// hand-placed feature coordinates below were originally tuned for the old
-// 192x192 map, so every anchor position is multiplied by SCALE to spread
-// them proportionally across the new map. Large biome footprints (mountain/
-// swamp/forest radii) are grown by SCALE_SOFT so they stay prominent without
-// becoming absurdly oversized. Small human-scale structures (houses, towers,
-// graves, tree crowns) are left at their original size. Density counts for
-// scattered content (caves, ore veins, decorations) are scaled by SCALE too
-// so the bigger map doesn't feel empty, without blowing up generation time
-// the way a full 16x (area-proportional) increase would.
-const SCALE = 4
-const SCALE_SOFT = 2
+// World was quadrupled in each linear dimension twice now (192->768->3072,
+// 256x area total off the original). All the hand-placed feature coordinates
+// below were originally tuned for the old 192x192 map, so every anchor
+// position is multiplied by SCALE to spread them proportionally across the
+// current map. Large biome footprints (mountain/swamp/forest radii) are
+// grown by SCALE_SOFT so they stay prominent without becoming absurdly
+// oversized. Small human-scale structures (houses, towers, graves, tree
+// crowns) are left at their original size. Density counts for scattered
+// content (caves, ore veins, decorations) are scaled by SCALE too so the
+// bigger map doesn't feel empty, without blowing up generation time the way
+// a full area-proportional increase would.
+const SCALE = 8
+const SCALE_SOFT = 4
 
 // ── Noise helpers ──────────────────────────────────────────────────────────
 function hash(x, z) {
@@ -86,6 +87,64 @@ export function buildIsland(worldData) {
   _addPondFloors(worldData)
   _addNaturalDecorations(worldData)
   _addGravelLayer(worldData)
+  _addOceanBiome(worldData)
+  _addGrassDecorations(worldData)
+}
+
+// ── Tall grass & flowers — scattered across open grass so the ground
+// isn't just a flat green plane ─────────────────────────────────────────
+function _addGrassDecorations(worldData) {
+  for (let x = 0; x < WORLD_W; x++) {
+    for (let z = 0; z < WORLD_D; z++) {
+      const sy = worldData.surfaceY(x, z)
+      if (sy < 0 || sy + 1 >= WORLD_H) continue
+      if (worldData.get(x, sy, z) !== BLOCK.GRASS) continue
+      if (worldData.get(x, sy + 1, z) !== BLOCK.AIR) continue
+
+      const density = smooth(x * 3, z * 3, 9)
+      if (density > 0.94) {
+        worldData.set(x, sy + 1, z, BLOCK.FLOWER)
+      } else if (density > 0.82) {
+        worldData.set(x, sy + 1, z, BLOCK.TALL_GRASS)
+      }
+    }
+  }
+}
+
+// ── Ocean biome — the sea surrounding the island, with a sandy shallow reef
+// ring (coral + kelp) and a deeper stone/gravel trench farther out ─────────
+function _addOceanBiome(worldData) {
+  for (let x = 0; x < WORLD_W; x++) {
+    for (let z = 0; z < WORLD_D; z++) {
+      const mask = islandMask(x, z)
+      if (mask <= 0.92) continue  // island interior — handled by land generation
+
+      const depthFactor = Math.min(1, (mask - 0.92) / 0.5)  // 0 at coast, 1 in the deep trench
+      const noiseY = smooth(x, z, 24) * 2 - 1
+      const floorY = Math.max(1, Math.min(SEA_LEVEL - 2, Math.round(SEA_LEVEL - 3 - depthFactor * 6 + noiseY)))
+
+      for (let y = 0; y <= floorY; y++) worldData.set(x, y, z, BLOCK.STONE)
+      const shallow = depthFactor < 0.4
+      worldData.set(x, floorY, z, shallow ? BLOCK.SAND : BLOCK.GRAVEL)
+      for (let y = floorY + 1; y <= SEA_LEVEL; y++) worldData.set(x, y, z, BLOCK.WATER)
+
+      // Reef decoration — coral and kelp scattered through the shallows only
+      if (shallow) {
+        const reefChance = smooth(x * 2, z * 2, 10)
+        if (reefChance > 0.62) {
+          const r = hash(x, z)
+          if (r > 0.55 && floorY + 1 <= SEA_LEVEL) {
+            worldData.set(x, floorY + 1, z, BLOCK.CORAL)
+            if (r > 0.8 && floorY + 2 <= SEA_LEVEL) worldData.set(x, floorY + 2, z, BLOCK.CORAL)
+          } else if (r > 0.35) {
+            const kelpH = 2 + Math.floor(hash(x + 1, z + 1) * 3)
+            for (let k = 1; k <= kelpH && floorY + k <= SEA_LEVEL; k++)
+              worldData.set(x, floorY + k, z, BLOCK.KELP)
+          }
+        }
+      }
+    }
+  }
 }
 
 // ── Stone base ────────────────────────────────────────────────────────────

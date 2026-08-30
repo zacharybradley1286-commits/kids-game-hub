@@ -183,6 +183,39 @@ function drawTool(ctx, item) {
   }
 }
 
+function drawArmor(ctx, item) {
+  const main = TIER_COLOR[item.tier] ?? '#aaaaaa'
+  const light = shade(main, 45)
+  const dark = shade(main, -35)
+
+  if (item.armorSlot === 'helmet') {
+    cellRect(ctx, 5, 2, 6, 2, main)
+    cellRect(ctx, 4, 4, 8, 4, main)
+    cellRect(ctx, 4, 4, 8, 1, light)
+    cellRect(ctx, 4, 8, 3, 2, dark)
+    cellRect(ctx, 9, 8, 3, 2, dark)
+  } else if (item.armorSlot === 'chestplate') {
+    cellRect(ctx, 5, 2, 6, 2, main)
+    cellRect(ctx, 3, 4, 10, 8, main)
+    cellRect(ctx, 3, 4, 10, 1, light)
+    cellRect(ctx, 3, 4, 2, 8, dark)
+    cellRect(ctx, 11, 4, 2, 8, dark)
+  } else if (item.armorSlot === 'leggings') {
+    cellRect(ctx, 4, 2, 8, 6, main)
+    cellRect(ctx, 4, 8, 3, 6, main)
+    cellRect(ctx, 9, 8, 3, 6, main)
+    cellRect(ctx, 4, 2, 8, 1, light)
+    cellRect(ctx, 7, 8, 2, 6, dark)
+  } else if (item.armorSlot === 'boots') {
+    cellRect(ctx, 3, 8, 4, 5, main)
+    cellRect(ctx, 3, 12, 5, 2, dark)
+    cellRect(ctx, 9, 8, 4, 5, main)
+    cellRect(ctx, 9, 12, 5, 2, dark)
+    cellRect(ctx, 3, 8, 4, 1, light)
+    cellRect(ctx, 9, 8, 4, 1, light)
+  }
+}
+
 // ── Food & seeds ────────────────────────────────────────────────────────
 function drawCircleFood(ctx, color, highlight) {
   const rows = [[5, 3, 6], [4, 4, 8], [3, 5, 10], [3, 6, 10], [3, 7, 10],
@@ -205,6 +238,24 @@ function drawCarrot(ctx) {
   cellRect(ctx, 6, 1, 1, 3, '#3a9028')
   cellRect(ctx, 9, 0, 1, 4, '#3a9028')
   cellRect(ctx, 8, 2, 1, 2, '#3a9028')
+}
+
+function drawFish(ctx, bodyColor, cooked) {
+  const dark = shade(bodyColor, -30)
+  // Body
+  cellRect(ctx, 4, 6, 7, 4, bodyColor)
+  cellRect(ctx, 4, 6, 7, 1, shade(bodyColor, 35))
+  // Tail fin
+  cells(ctx, [[1, 5], [2, 6], [2, 7], [1, 8], [2, 8], [2, 9]], dark)
+  // Eye
+  cell(ctx, 10, 7, '#111111')
+  // Top/bottom fins
+  cellRect(ctx, 6, 5, 2, 1, dark)
+  cellRect(ctx, 6, 10, 2, 1, dark)
+  if (cooked) {
+    cellRect(ctx, 5, 7, 1, 2, '#c87830')
+    cellRect(ctx, 8, 7, 1, 2, '#c87830')
+  }
 }
 
 function drawSeed(ctx, color) {
@@ -295,6 +346,8 @@ const SPECIAL = {
   baked_potato: (ctx) => drawMeat(ctx, '#c87830'),
   cooked_meat: (ctx) => drawMeat(ctx, '#8b4a2a'),
   raw_meat: (ctx) => drawMeat(ctx, '#cc4444'),
+  raw_fish: (ctx) => drawFish(ctx, '#88aacc', false),
+  cooked_fish: (ctx) => drawFish(ctx, '#c8a858', true),
   wheat_seed: (ctx) => drawSeed(ctx, '#aaaa22'),
   carrot_seed: (ctx) => drawSeed(ctx, '#ff8800'),
   potato_seed: (ctx) => drawSeed(ctx, '#c89050'),
@@ -331,6 +384,8 @@ export function getItemIcon(item) {
       drawBlock(ctx, item)
     } else if (item.category === 'tool' || item.category === 'weapon') {
       drawTool(ctx, item)
+    } else if (item.category === 'armor') {
+      drawArmor(ctx, item)
     } else {
       drawBlockSquare(ctx, '#666666')
     }

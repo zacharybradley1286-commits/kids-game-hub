@@ -57,6 +57,10 @@ export const BLOCK = {
   GLOWSTONE:      24,
   OBSIDIAN:       25,
   PORTAL:         26,
+  CORAL:          27,
+  KELP:           28,
+  TALL_GRASS:     29,
+  FLOWER:         30,
 }
 
 export const BLOCK_DB = {
@@ -91,6 +95,10 @@ export const BLOCK_DB = {
   [BLOCK.GLOWSTONE]:      new BlockType({ id: BLOCK.GLOWSTONE,      name: 'glowstone',      color: '#f0d878', hardness: 0.5,  atlasCol: 5, atlasRow: 2 }),
   [BLOCK.OBSIDIAN]:       new BlockType({ id: BLOCK.OBSIDIAN,       name: 'obsidian',       color: '#1a0e28', hardness: 6.0,  minTier: 4, atlasCol: 6, atlasRow: 2 }),
   [BLOCK.PORTAL]:         new BlockType({ id: BLOCK.PORTAL,         name: 'nether_portal',  color: '#9020e0', hardness: 999,  isTransparent: true, isSolid: true, atlasCol: 7, atlasRow: 2 }),
+  [BLOCK.CORAL]:          new BlockType({ id: BLOCK.CORAL,          name: 'coral',          color: '#ff6a8a', hardness: 0.2,  isTransparent: true, isSolid: false, atlasCol: 8, atlasRow: 3 }),
+  [BLOCK.KELP]:           new BlockType({ id: BLOCK.KELP,           name: 'kelp',           color: '#2a8a4a', hardness: 0.2,  isTransparent: true, isSolid: false, atlasCol: 9, atlasRow: 3 }),
+  [BLOCK.TALL_GRASS]:     new BlockType({ id: BLOCK.TALL_GRASS,     name: 'tall_grass',     color: '#4a8f3f', hardness: 0.1,  dropItem: null,     isTransparent: true, isSolid: false, atlasCol: 10, atlasRow: 3 }),
+  [BLOCK.FLOWER]:         new BlockType({ id: BLOCK.FLOWER,         name: 'flower',         color: '#e05070', hardness: 0.1,  dropItem: null,     isTransparent: true, isSolid: false, atlasCol: 11, atlasRow: 3 }),
 }
 
 export const BLOCK_BY_NAME = {}

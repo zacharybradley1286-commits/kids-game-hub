@@ -22,6 +22,7 @@ const ALL_RECIPES = [
 
   // --- Campfire cooking ---
   new Recipe('cooked_meat',     { raw_meat: 1 },                                  'cooked_meat',     1,  'campfire', 0),
+  new Recipe('cooked_fish',     { raw_fish: 1 },                                  'cooked_fish',     1,  'campfire', 0),
   new Recipe('baked_potato',    { potato_seed: 1 },                               'baked_potato',    1,  'campfire', 0),
 
   // --- Crafting table ---
@@ -53,6 +54,27 @@ const ALL_RECIPES = [
   new Recipe('crystal_pickaxe', { crystal_shard: 3, iron_ingot: 1, stick: 2 },  'crystal_pickaxe', 1,  'forge', 3),
   new Recipe('crystal_shovel',  { crystal_shard: 1, iron_ingot: 1, stick: 2 },  'crystal_shovel',  1,  'forge', 3),
   new Recipe('crystal_sword',   { crystal_shard: 2, iron_ingot: 1 },            'crystal_sword',   1,  'forge', 3),
+
+  // --- Armor ---
+  new Recipe('wooden_helmet',     { planks: 5 },                                   'wooden_helmet',     1,  'crafting_table', 0),
+  new Recipe('wooden_chestplate', { planks: 8 },                                   'wooden_chestplate', 1,  'crafting_table', 0),
+  new Recipe('wooden_leggings',   { planks: 7 },                                   'wooden_leggings',   1,  'crafting_table', 0),
+  new Recipe('wooden_boots',      { planks: 4 },                                   'wooden_boots',      1,  'crafting_table', 0),
+
+  new Recipe('stone_helmet',     { cobblestone: 5 },                               'stone_helmet',     1,  'crafting_table', 1),
+  new Recipe('stone_chestplate', { cobblestone: 8 },                               'stone_chestplate', 1,  'crafting_table', 1),
+  new Recipe('stone_leggings',   { cobblestone: 7 },                               'stone_leggings',   1,  'crafting_table', 1),
+  new Recipe('stone_boots',      { cobblestone: 4 },                               'stone_boots',      1,  'crafting_table', 1),
+
+  new Recipe('iron_helmet',     { iron_ingot: 5 },                                 'iron_helmet',     1,  'crafting_table', 2),
+  new Recipe('iron_chestplate', { iron_ingot: 8 },                                 'iron_chestplate', 1,  'crafting_table', 2),
+  new Recipe('iron_leggings',   { iron_ingot: 7 },                                 'iron_leggings',   1,  'crafting_table', 2),
+  new Recipe('iron_boots',      { iron_ingot: 4 },                                 'iron_boots',      1,  'crafting_table', 2),
+
+  new Recipe('crystal_helmet',     { crystal_shard: 3, iron_ingot: 2 },            'crystal_helmet',     1,  'forge', 3),
+  new Recipe('crystal_chestplate', { crystal_shard: 6, iron_ingot: 2 },            'crystal_chestplate', 1,  'forge', 3),
+  new Recipe('crystal_leggings',   { crystal_shard: 5, iron_ingot: 2 },            'crystal_leggings',   1,  'forge', 3),
+  new Recipe('crystal_boots',      { crystal_shard: 3, iron_ingot: 1 },            'crystal_boots',      1,  'forge', 3),
 
   // Obsidian and the portal that leads to the Nether
   new Recipe('obsidian',        { cobblestone: 4, crystal_shard: 2 },           'obsidian',        1,  'forge', 3),

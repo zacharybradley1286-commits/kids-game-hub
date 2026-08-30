@@ -63,6 +63,7 @@ export class PlayerController {
         this._vy = JUMP_SPEED
         this._onGround = false
       }
+      if (e.code === 'KeyQ') this._dropHeldItem()
     })
     window.addEventListener('keyup', e => {
       this._keys[e.code] = false
@@ -409,6 +410,8 @@ export class PlayerController {
       ['planks',        4, 10, 15],
       ['wheat_seed',    3, 8,  12],
       ['carrot',        2, 6,  12],
+      ['carrot_seed',   2, 5,  10],
+      ['potato_seed',   2, 5,  10],
       ['gravel',        4, 10, 10],
     ]
     const LOOT_UNCOMMON = [
@@ -479,6 +482,23 @@ export class PlayerController {
     const slot = this.inventory.selectedSlot
     if (!slot.itemId) return null
     return this.itemRegistry.getItem(slot.itemId)
+  }
+
+  // Q — drops one of the currently selected item out into the world as a
+  // pickup (see onDropItem / DroppedItemManager), rather than just deleting
+  // it, so an accidental press never permanently costs the player anything.
+  _dropHeldItem() {
+    if (!this.controls.isLocked) return
+    const slot = this.inventory.selectedSlot
+    if (!slot.itemId) return
+
+    const dir = new THREE.Vector3()
+    this.camera.getWorldDirection(dir)
+    const dropPos = this.camera.position.clone().add(dir.multiplyScalar(1.5))
+    dropPos.y -= 1.0
+
+    this.onDropItem?.(slot.itemId, 1, dropPos)
+    this.inventory.removeSlot(this.inventory.hotbarIndex)
   }
 
   _updateStation() {

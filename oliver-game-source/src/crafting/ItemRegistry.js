@@ -1,10 +1,11 @@
 export class ItemType {
   constructor({ id, name, category, tier = 0, stackSize = 64,
                 damage = 0, durability = 0, foodValue = 0, blockId = -1,
-                isHoe = false, isAxe = false, isSword = false, isPickaxe = false, isShovel = false }) {
+                isHoe = false, isAxe = false, isSword = false, isPickaxe = false, isShovel = false,
+                armorSlot = null, defense = 0 }) {
     this.id = id
     this.name = name
-    this.category = category  // 'block','tool','weapon','food','seed','misc'
+    this.category = category  // 'block','tool','weapon','food','seed','misc','armor'
     this.tier = tier
     this.stackSize = stackSize
     this.damage = damage
@@ -16,6 +17,8 @@ export class ItemType {
     this.isSword = isSword
     this.isPickaxe = isPickaxe
     this.isShovel = isShovel
+    this.armorSlot = armorSlot     // 'helmet'|'chestplate'|'leggings'|'boots'
+    this.defense = defense
   }
 }
 
@@ -37,6 +40,10 @@ const ITEMS = [
   { id:'nether_portal',  name:'Nether Portal',  category:'block',  stackSize:1,  blockId:26 },
   { id:'netherrack',     name:'Netherrack',     category:'block',  stackSize:64, blockId:22 },
   { id:'glowstone',      name:'Glowstone',      category:'block',  stackSize:64, blockId:24 },
+  { id:'coral',          name:'Coral',          category:'block',  stackSize:64, blockId:27 },
+  { id:'kelp',           name:'Kelp',           category:'block',  stackSize:64, blockId:28 },
+  { id:'tall_grass',     name:'Tall Grass',     category:'misc',   stackSize:64 },
+  { id:'flower',         name:'Flower',         category:'misc',   stackSize:64 },
 
   // Raw materials
   { id:'iron_ore',       name:'Iron Ore',       category:'misc',   stackSize:64 },
@@ -62,6 +69,8 @@ const ITEMS = [
   { id:'baked_potato',   name:'Baked Potato',   category:'food',   stackSize:16, foodValue:5 },
   { id:'cooked_meat',    name:'Cooked Meat',    category:'food',   stackSize:16, foodValue:8 },
   { id:'raw_meat',       name:'Raw Meat',       category:'food',   stackSize:16, foodValue:2 },
+  { id:'raw_fish',       name:'Raw Fish',       category:'food',   stackSize:16, foodValue:2 },
+  { id:'cooked_fish',    name:'Cooked Fish',    category:'food',   stackSize:16, foodValue:6 },
 
   // Tier 1 — Wood tools
   { id:'wooden_axe',     name:'Wooden Axe',     category:'tool',   tier:1, stackSize:1, damage:2.5, durability:60,  isAxe:true },
@@ -89,6 +98,30 @@ const ITEMS = [
   { id:'crystal_pickaxe',name:'Crystal Pickaxe',category:'tool',   tier:4, stackSize:1, damage:6.5, durability:500, isPickaxe:true },
   { id:'crystal_shovel', name:'Crystal Shovel', category:'tool',   tier:4, stackSize:1, damage:5.5, durability:500, isShovel:true },
   { id:'crystal_sword',  name:'Crystal Sword',  category:'weapon', tier:4, stackSize:1, damage:12.0,durability:500, isSword:true },
+
+  // Armor — Tier 1 Wood
+  { id:'wooden_helmet',     name:'Wooden Helmet',     category:'armor', tier:1, stackSize:1, durability:60,  armorSlot:'helmet',     defense:1 },
+  { id:'wooden_chestplate', name:'Wooden Chestplate', category:'armor', tier:1, stackSize:1, durability:60,  armorSlot:'chestplate', defense:2 },
+  { id:'wooden_leggings',   name:'Wooden Leggings',   category:'armor', tier:1, stackSize:1, durability:60,  armorSlot:'leggings',   defense:2 },
+  { id:'wooden_boots',      name:'Wooden Boots',      category:'armor', tier:1, stackSize:1, durability:60,  armorSlot:'boots',      defense:1 },
+
+  // Armor — Tier 2 Stone
+  { id:'stone_helmet',     name:'Stone Helmet',     category:'armor', tier:2, stackSize:1, durability:130, armorSlot:'helmet',     defense:1 },
+  { id:'stone_chestplate', name:'Stone Chestplate', category:'armor', tier:2, stackSize:1, durability:130, armorSlot:'chestplate', defense:3 },
+  { id:'stone_leggings',   name:'Stone Leggings',   category:'armor', tier:2, stackSize:1, durability:130, armorSlot:'leggings',   defense:3 },
+  { id:'stone_boots',      name:'Stone Boots',      category:'armor', tier:2, stackSize:1, durability:130, armorSlot:'boots',      defense:2 },
+
+  // Armor — Tier 3 Iron
+  { id:'iron_helmet',     name:'Iron Helmet',     category:'armor', tier:3, stackSize:1, durability:250, armorSlot:'helmet',     defense:2 },
+  { id:'iron_chestplate', name:'Iron Chestplate', category:'armor', tier:3, stackSize:1, durability:250, armorSlot:'chestplate', defense:4 },
+  { id:'iron_leggings',   name:'Iron Leggings',   category:'armor', tier:3, stackSize:1, durability:250, armorSlot:'leggings',   defense:4 },
+  { id:'iron_boots',      name:'Iron Boots',      category:'armor', tier:3, stackSize:1, durability:250, armorSlot:'boots',      defense:2 },
+
+  // Armor — Tier 4 Crystal
+  { id:'crystal_helmet',     name:'Crystal Helmet',     category:'armor', tier:4, stackSize:1, durability:500, armorSlot:'helmet',     defense:3 },
+  { id:'crystal_chestplate', name:'Crystal Chestplate', category:'armor', tier:4, stackSize:1, durability:500, armorSlot:'chestplate', defense:6 },
+  { id:'crystal_leggings',   name:'Crystal Leggings',   category:'armor', tier:4, stackSize:1, durability:500, armorSlot:'leggings',   defense:5 },
+  { id:'crystal_boots',      name:'Crystal Boots',      category:'armor', tier:4, stackSize:1, durability:500, armorSlot:'boots',      defense:3 },
 ]
 
 export class ItemRegistry {

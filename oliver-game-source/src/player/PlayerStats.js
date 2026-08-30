@@ -12,6 +12,14 @@ export class PlayerStats {
     this.damageMult = 1.0       // incoming damage multiplier (set by difficulty)
     this.onDeath = null    // callback
     this.onChange = null   // callback for UI
+    this._inventory = null
+    this._itemRegistry = null
+  }
+
+  // Called once from Game.js so takeDamage can look up equipped armor.
+  linkArmorSource(inventory, itemRegistry) {
+    this._inventory = inventory
+    this._itemRegistry = itemRegistry
   }
 
   // Call once at new game start — locked in for the run
@@ -53,7 +61,9 @@ export class PlayerStats {
 
   takeDamage(amount) {
     if (this.dead) return
-    this.health = Math.max(0, this.health - amount * this.damageMult)
+    const defense = this._inventory ? this._inventory.getArmorDefense(this._itemRegistry) : 0
+    const reduction = Math.min(0.8, defense * 0.04)  // each defense point cuts 4%, capped at 80%
+    this.health = Math.max(0, this.health - amount * this.damageMult * (1 - reduction))
     this.onChange?.()
     if (this.health <= 0 && !this.dead) {
       this.dead = true

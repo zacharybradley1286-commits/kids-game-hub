@@ -1,3 +1,5 @@
+export const ARMOR_SLOTS = ['helmet', 'chestplate', 'leggings', 'boots']
+
 export class InventorySlot {
   constructor() {
     this.itemId = null
@@ -11,8 +13,53 @@ export class Inventory {
     this.HOTBAR_SIZE = 9
     this.TOTAL_SIZE = 36
     this.slots = Array.from({ length: this.TOTAL_SIZE }, () => new InventorySlot())
+    this.armor = {}
+    for (const s of ARMOR_SLOTS) this.armor[s] = new InventorySlot()
     this.hotbarIndex = 0
     this._changeListeners = []
+  }
+
+  // Equip an armor item straight from a main-inventory slot into its armor slot.
+  // Any item already equipped there is swapped back into the main slot it came from.
+  equipArmor(mainSlotIndex, itemRegistry) {
+    const slot = this.slots[mainSlotIndex]
+    const item = itemRegistry?.getItem(slot.itemId)
+    if (!item || !item.armorSlot) return false
+    const armorSlot = this.armor[item.armorSlot]
+    const prev = { itemId: armorSlot.itemId, count: armorSlot.count, durability: armorSlot.durability }
+    armorSlot.itemId = slot.itemId
+    armorSlot.count = 1
+    armorSlot.durability = slot.durability
+    slot.count--
+    if (slot.count <= 0) {
+      slot.itemId = prev.itemId
+      slot.count = prev.itemId ? prev.count : 0
+      slot.durability = prev.durability
+    }
+    this._fireChange()
+    return true
+  }
+
+  // Move an equipped armor piece back into the first free main-inventory slot.
+  unequipArmor(armorSlotType, itemRegistry) {
+    const armorSlot = this.armor[armorSlotType]
+    if (!armorSlot.itemId) return false
+    const leftover = this.add(armorSlot.itemId, armorSlot.count, itemRegistry)
+    if (leftover > 0) return false  // inventory full — leave equipped
+    armorSlot.itemId = null
+    armorSlot.count = 0
+    armorSlot.durability = null
+    this._fireChange()
+    return true
+  }
+
+  getArmorDefense(itemRegistry) {
+    let total = 0
+    for (const s of ARMOR_SLOTS) {
+      const itemId = this.armor[s].itemId
+      if (itemId) total += itemRegistry?.getItem(itemId)?.defense ?? 0
+    }
+    return total
   }
 
   addChangeListener(fn) { this._changeListeners.push(fn) }
@@ -123,14 +170,31 @@ export class Inventory {
   }
 
   serialize() {
-    return this.slots.map(s => ({ itemId: s.itemId, count: s.count, durability: s.durability }))
+    const armor = {}
+    for (const s of ARMOR_SLOTS) {
+      armor[s] = { itemId: this.armor[s].itemId, count: this.armor[s].count, durability: this.armor[s].durability }
+    }
+    return {
+      slots: this.slots.map(s => ({ itemId: s.itemId, count: s.count, durability: s.durability })),
+      armor,
+    }
   }
 
   deserialize(data) {
-    for (let i = 0; i < Math.min(data.length, this.TOTAL_SIZE); i++) {
-      this.slots[i].itemId = data[i].itemId
-      this.slots[i].count = data[i].count
-      this.slots[i].durability = data[i].durability
+    // Backwards-compatible: older saves are a bare slots array with no armor.
+    const slots = Array.isArray(data) ? data : (data?.slots ?? [])
+    const armor = Array.isArray(data) ? null : data?.armor
+    for (let i = 0; i < Math.min(slots.length, this.TOTAL_SIZE); i++) {
+      this.slots[i].itemId = slots[i].itemId
+      this.slots[i].count = slots[i].count
+      this.slots[i].durability = slots[i].durability
+    }
+    if (armor) {
+      for (const s of ARMOR_SLOTS) {
+        this.armor[s].itemId = armor[s]?.itemId ?? null
+        this.armor[s].count = armor[s]?.count ?? 0
+        this.armor[s].durability = armor[s]?.durability ?? null
+      }
     }
     this._fireChange()
   }

@@ -1,5 +1,5 @@
-export const WORLD_W = 768
-export const WORLD_D = 768
+export const WORLD_W = 1536
+export const WORLD_D = 1536
 export const WORLD_H = 32
 export const CHUNK_W = 16
 export const CHUNKS_X = WORLD_W / CHUNK_W  // 12

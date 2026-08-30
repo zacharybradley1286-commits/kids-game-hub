@@ -8,6 +8,7 @@ export class HUD {
     this.breakWrap   = document.getElementById('break-progress-wrap')
     this.breakFill   = document.getElementById('break-progress-fill')
     this.pickupFlash = document.getElementById('pickup-flash')
+    this.minimap     = document.getElementById('minimap')
     this._flashTimeout = null
   }
 
@@ -15,12 +16,14 @@ export class HUD {
     this.hudEl.style.display = 'flex'
     this.crosshair.style.display = 'block'
     this.dayCounter.style.display = 'block'
+    this.minimap.style.display = 'block'
   }
 
   hide() {
     this.hudEl.style.display = 'none'
     this.crosshair.style.display = 'none'
     this.dayCounter.style.display = 'none'
+    this.minimap.style.display = 'none'
   }
 
   updateHealth(current, max) {

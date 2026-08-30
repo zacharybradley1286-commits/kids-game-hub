@@ -65,4 +65,20 @@ export const MOB_DB = {
     scale: [0.6, 0.7, 0.6],
     dropItems: [{ itemId: 'raw_meat', chance: 0.8, count: 1 }],
   }),
+
+  // Sea life — confined to water, see SeaLifeSpawner.js
+  fish: new MobType({
+    id: 'fish', name: 'Fish', color: '#ff8c1a',
+    health: 2, damage: 0, speed: 1.6,
+    detectionRange: 0, attackRange: 0, attackCooldown: 999,
+    scale: [0.6, 0.42, 1.05],
+    dropItems: [{ itemId: 'raw_fish', chance: 1.0, count: 1 }],
+  }),
+  shark: new MobType({
+    id: 'shark', name: 'Shark', color: '#e8ecef',
+    health: 14, damage: 3, speed: 3.2,
+    detectionRange: 12, attackRange: 1.8, attackCooldown: 1.3,
+    scale: [0.9, 0.7, 2.2],
+    dropItems: [{ itemId: 'raw_fish', chance: 0.6, count: 1 }, { itemId: 'bone', chance: 0.3, count: 1 }],
+  }),
 }
