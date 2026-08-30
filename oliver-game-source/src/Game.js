@@ -22,6 +22,7 @@ import { BossMountain } from './bosses/BossMountain.js'
 import { FinalBoss } from './bosses/FinalBoss.js'
 import { HUD } from './ui/HUD.js'
 import { Hotbar } from './ui/Hotbar.js'
+import { MiniMap } from './ui/MiniMap.js'
 import { InventoryUI } from './ui/InventoryUI.js'
 import { CraftingUI } from './crafting/CraftingUI.js'
 import { SaveSystem } from './save/SaveSystem.js'
@@ -111,6 +112,7 @@ export class Game {
     // UI
     this.hud = new HUD()
     this.hotbar = new Hotbar(this.inventory, this.itemRegistry)
+    this.miniMap = new MiniMap(this.worldData, () => this._bossList)
 
     // Farming
     this.farmingSystem = new FarmingSystem(this.worldData, this.scene)
@@ -274,6 +276,7 @@ export class Game {
     sounds.startMusic()
     this.hud.show()
     this.hotbar.show()
+    this.miniMap.show()
     this.hud.updateDay(this.dayNight.dayNumber)
     this.hud.updateHealth(this.stats.health, this.stats.maxHealth)
     this.hud.updateHunger(this.stats.hunger, this.stats.maxHunger)
@@ -532,6 +535,11 @@ export class Game {
     }
     this._updateBlockOutline()
     this._updateSky(dt)
+    // Only meaningful in the overworld — the Nether shares the same
+    // WorldData instance/coordinate space (see NetherWorldBuilder) but has
+    // no bosses or portal-spawn POI to show, so it'd just draw the wrong
+    // terrain colors underneath real Nether gameplay.
+    if (this.currentDimension !== 'nether') this.miniMap.update(dt, this.camera)
 
     // Update active boss — show bar for the closest living boss within 40 blocks.
     // Bosses only exist in the overworld; skip the proximity check in the
