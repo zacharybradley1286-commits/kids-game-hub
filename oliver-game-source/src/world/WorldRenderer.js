@@ -110,7 +110,6 @@ export class WorldRenderer {
     const out = []
     for (const r of this.chunks.values()) {
       if (r.mesh) out.push(r.mesh)
-      if (r.liquidMesh) out.push(r.liquidMesh)
     }
     return out
   }

@@ -146,7 +146,10 @@ export class MiningSystem {
   placeBlock(worldPos, blockId) {
     const [bx, by, bz] = worldPos
     if (!this.worldData.inBounds(bx, by, bz)) return false
-    if (this.worldData.get(bx, by, bz) !== BLOCK.AIR) return false
+    const existing = this.worldData.get(bx, by, bz)
+    const replaceable = existing === BLOCK.AIR ||
+      existing === BLOCK.TALL_GRASS || existing === BLOCK.FLOWER
+    if (!replaceable) return false
     if (this.isOccupied?.(bx, by, bz)) return false
     this.worldData.set(bx, by, bz, blockId)
     const cx = Math.floor(bx / CHUNK_W)

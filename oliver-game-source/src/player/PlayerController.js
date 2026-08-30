@@ -73,6 +73,11 @@ export class PlayerController {
         this._onGround = false
       }
       if (e.code === 'KeyQ') this._dropHeldItem()
+      // F = use / place (trackpads often have no reliable right-click)
+      if (e.code === 'KeyF' && this.controls.isLocked) {
+        e.preventDefault()
+        this._handleRightClick()
+      }
     })
     window.addEventListener('keyup', e => {
       this._keys[e.code] = false
@@ -82,18 +87,17 @@ export class PlayerController {
 
     window.addEventListener('mousedown', e => {
       if (!this.controls.isLocked) return
-      if (e.button === 0 && (e.altKey || e.metaKey)) {
-        // Alt/Option+click = right-click alternative (trackpad friendly).
-        // Shift is sprint, so it must NOT steal mining.
+      // Place/use: real right-click, Ctrl+click (Windows), Alt/Option+click (Mac).
+      // Shift is sprint and must not steal mining.
+      const placeClick = e.button === 2 ||
+        (e.button === 0 && (e.ctrlKey || e.altKey || e.metaKey))
+      if (placeClick) {
+        e.preventDefault()
         this._handleRightClick()
         return
       }
       if (e.button === 0) {
         this._mouseDown = true
-      }
-      if (e.button === 2) {
-        e.preventDefault()
-        this._handleRightClick()
       }
     })
     window.addEventListener('mouseup', e => {
@@ -120,9 +124,8 @@ export class PlayerController {
     if (!this.controls.isLocked) return
     if (this._attackCooldown > 0) this._attackCooldown -= dt
 
-    // Sprint — hold Shift. Ctrl still works; Shift is NOT "place".
-    this._sprinting = this._keys['ShiftLeft'] || this._keys['ShiftRight'] ||
-                       this._keys['ControlLeft'] || this._keys['ControlRight']
+    // Sprint is Shift only. Ctrl+click is Windows right-click / place.
+    this._sprinting = this._keys['ShiftLeft'] || this._keys['ShiftRight']
     const speed = MOVE_SPEED * (this._sprinting ? 1.65 : 1.0) * (this.mounted ? 1.8 : 1)
 
     if (this.mounted && this.boat) {
@@ -310,6 +313,7 @@ export class PlayerController {
     if (hits.length === 0) return null
 
     const hit = hits[0]
+    if (!hit?.face) return null
     const point = hit.point
     const normal = hit.face.normal.clone()
     const dir = this._raycaster.ray.direction
@@ -352,7 +356,7 @@ export class PlayerController {
       this._dismountBoat()
       return
     }
-    if (this.boat && this._nearBoat(3)) {
+    if (this.boat && !heldItem?.blockId && this._nearBoat(1.6)) {
       this._mountBoat()
       return
     }
@@ -399,13 +403,15 @@ export class PlayerController {
       return
     }
 
-    // Harvest crop (right-click on farmland)
-    const harvest = this.farming.tryHarvest(hit.blockPos)
-    if (harvest) {
-      this._give(harvest.itemId, harvest.count)
-      if (harvest.seedCount > 0) this._give(harvest.seedItem, harvest.seedCount)
-      this.hud.showPickup(this.itemRegistry.getItem(harvest.itemId)?.name ?? harvest.itemId)
-      return
+    // Harvest crop (empty hand / non-block). A held block should still place.
+    if (!(heldItem?.blockId >= 0)) {
+      const harvest = this.farming.tryHarvest(hit.blockPos)
+      if (harvest) {
+        this._give(harvest.itemId, harvest.count)
+        if (harvest.seedCount > 0) this._give(harvest.seedItem, harvest.seedCount)
+        this.hud.showPickup(this.itemRegistry.getItem(harvest.itemId)?.name ?? harvest.itemId)
+        return
+      }
     }
 
     // Open chest — chest stays in the world; contents live in ChestSystem
@@ -447,9 +453,13 @@ export class PlayerController {
       }
     }
 
-    // Place block
+    // Place block — replace tall grass/flowers in-place, otherwise the face in front
     if (heldItem?.blockId >= 0) {
-      const placed = this.mining.placeBlock(hit.adjacentPos, heldItem.blockId)
+      const [bx, by, bz] = hit.blockPos
+      const hitId = this.worldData.get(bx, by, bz)
+      const replaceHit = hitId === BLOCK.TALL_GRASS || hitId === BLOCK.FLOWER
+      const pos = replaceHit ? hit.blockPos : hit.adjacentPos
+      const placed = this.mining.placeBlock(pos, heldItem.blockId)
       if (placed) {
         this.inventory.removeSlot(this.inventory.hotbarIndex)
       }
