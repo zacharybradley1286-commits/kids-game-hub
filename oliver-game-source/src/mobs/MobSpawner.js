@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { MAX_MOBS, MOB_SPAWN_RADIUS, WORLD_W, WORLD_D } from '../constants.js'
+import { BLOCK } from '../world/BlockRegistry.js'
 import { MOB_DB } from './MobRegistry.js'
 import { MobBase } from './MobBase.js'
 import { MobAI } from './MobAI.js'
@@ -58,8 +59,9 @@ export class MobSpawner {
     const bx = Math.floor(sx)
     const bz = Math.floor(sz)
     if (bx < 1 || bx >= WORLD_W - 1 || bz < 1 || bz >= WORLD_D - 1) return
-    const sy = this.worldData.surfaceY(bx, bz)
-    if (sy < 0) return
+    const sy = this.worldData.solidSurfaceY?.(bx, bz) ?? this.worldData.surfaceY(bx, bz)
+    if (sy < 0 || sy < 5) return
+    if (this.worldData.get(bx, sy + 1, bz) === BLOCK.WATER) return
 
     const typeId = MOB_TYPES[Math.floor(Math.random() * MOB_TYPES.length)]
     const mobType = MOB_DB[typeId]

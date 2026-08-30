@@ -36,7 +36,7 @@ export class Minimap {
     this._timer = TERRAIN_INTERVAL  // force an immediate resample (new dimension)
   }
 
-  update(dt, playerPos, playerYaw, mobs = []) {
+  update(dt, playerPos, playerYaw, mobs = [], markers = []) {
     if (!this.ctx) return
 
     this._timer += dt
@@ -59,6 +59,19 @@ export class Minimap {
       ctx.beginPath()
       ctx.arc((mdx + RADIUS) * scale, (mdz + RADIUS) * scale, 2.5, 0, Math.PI * 2)
       ctx.fill()
+    }
+
+    for (const mk of markers) {
+      if (!mk) continue
+      const mdx = mk.x - px, mdz = mk.z - pz
+      if (Math.abs(mdx) > RADIUS || Math.abs(mdz) > RADIUS) continue
+      ctx.fillStyle = mk.color || '#ffff00'
+      ctx.beginPath()
+      ctx.arc((mdx + RADIUS) * scale, (mdz + RADIUS) * scale, 3.5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = '#000'
+      ctx.lineWidth = 1
+      ctx.stroke()
     }
 
     // Player arrow — always centered, rotates to face the camera's yaw.

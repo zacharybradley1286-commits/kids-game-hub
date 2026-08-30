@@ -47,6 +47,9 @@ const ALL_RECIPES = [
   new Recipe('glass',           { sand: 1 },                                     'glass',           1,  'crafting_table', 0),
   new Recipe('chest',           { planks: 8 },                                   'chest',           1,  'crafting_table', 0),
   new Recipe('bed',             { planks: 3, string: 3 },                       'bed',             1,  'crafting_table', 0),
+  new Recipe('torch',           { stick: 1 },                                    'torch',           4,  'hand', 0),
+  new Recipe('boat',            { planks: 5 },                                   'boat',            1,  'crafting_table', 0),
+  new Recipe('forge',           { cobblestone: 8, iron_ingot: 1 },              'forge',           1,  'crafting_table', 1),
 
   // --- Forge ---
   new Recipe('iron_ingot',      { iron_ore: 1 },                                 'iron_ingot',      1,  'forge', 0),
@@ -121,7 +124,7 @@ export class RecipeRegistry {
     for (const [itemId, count] of Object.entries(recipe.ingredients)) {
       inventory.remove(itemId, count)
     }
-    inventory.add(recipe.resultItem, recipe.resultCount, itemRegistry)
-    return true
+    const leftover = inventory.add(recipe.resultItem, recipe.resultCount, itemRegistry)
+    return leftover === 0 ? true : leftover
   }
 }

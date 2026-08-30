@@ -485,7 +485,7 @@ export class MobBase {
     const bz = Math.floor(pos.z)
     if (worldData.isSolid(bx, by, bz)) {
       this._vy = 0
-      const surfY = worldData.surfaceY(bx, bz)
+      const surfY = worldData.solidSurfaceY?.(bx, bz) ?? worldData.surfaceY(bx, bz)
       if (surfY >= 0) pos.y = surfY + 1 + this.mobType.scale[1] / 2
     } else {
       pos.y = newY

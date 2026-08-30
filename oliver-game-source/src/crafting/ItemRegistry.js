@@ -2,6 +2,7 @@ export class ItemType {
   constructor({ id, name, category, tier = 0, stackSize = 64,
                 damage = 0, durability = 0, foodValue = 0, blockId = -1,
                 isHoe = false, isAxe = false, isSword = false, isPickaxe = false, isShovel = false,
+                isBoat = false,
                 armorSlot = null, defense = 0 }) {
     this.id = id
     this.name = name
@@ -17,6 +18,7 @@ export class ItemType {
     this.isSword = isSword
     this.isPickaxe = isPickaxe
     this.isShovel = isShovel
+    this.isBoat = isBoat
     this.armorSlot = armorSlot     // 'helmet'|'chestplate'|'leggings'|'boots'
     this.defense = defense
   }
@@ -49,7 +51,9 @@ const ITEMS = [
   { id:'iron_ore',       name:'Iron Ore',       category:'misc',   stackSize:64 },
   { id:'iron_ingot',     name:'Iron Ingot',     category:'misc',   stackSize:64 },
   { id:'crystal_shard',  name:'Crystal Shard',  category:'misc',   stackSize:64 },
-  { id:'stick',          name:'Stick',          category:'weapon', stackSize:64, damage:1.5, isSword:true },
+  { id:'stick',          name:'Stick',          category:'misc',   stackSize:64 },
+  { id:'torch',          name:'Torch',          category:'block',  stackSize:64, blockId:19 },
+  { id:'boat',           name:'Raft',           category:'misc',   stackSize:1,  isBoat:true },
   { id:'string',         name:'String',         category:'misc',   stackSize:64 },
   { id:'bone',           name:'Bone',           category:'misc',   stackSize:64 },
 

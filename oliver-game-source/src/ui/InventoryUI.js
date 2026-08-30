@@ -9,8 +9,9 @@ export class InventoryUI {
     this.grid = document.getElementById('inv-grid')
     this.armorRow = document.getElementById('armor-row')
     this.defenseLabel = document.getElementById('armor-defense-label')
+    this.pigGrid = document.getElementById('pig-grid')
     this.visible = false
-    this._selected = null   // index of clicked slot waiting to be swapped
+    this._selected = null   // slot ref waiting to be swapped
     inventory.addChangeListener(() => { if (this.visible) this.refresh() })
   }
 
@@ -32,13 +33,22 @@ export class InventoryUI {
 
   refresh() {
     this._refreshArmor()
-    this.grid.innerHTML = ''
-    for (let i = 0; i < 36; i++) {
-      const slot = this.inventory.slots[i]
+    this._fillGrid(this.grid, this.inventory.slots, (i) => i, { hotbar: true, armorClick: true })
+    if (this.pigGrid) {
+      this._fillGrid(this.pigGrid, this.inventory.pigSlots, (i) => `p${i}`, { hotbar: false, armorClick: false })
+    }
+  }
+
+  _fillGrid(grid, slots, refOf, { hotbar, armorClick }) {
+    if (!grid) return
+    grid.innerHTML = ''
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i]
+      const ref = refOf(i)
       const cell = document.createElement('div')
       cell.className = 'inv-slot'
-      if (i < 9) cell.style.border = '1px solid rgba(255,255,150,0.4)'  // hotbar row
-      if (i === this._selected) cell.style.outline = '2px solid #fff'   // selection highlight
+      if (hotbar && i < 9) cell.style.border = '1px solid rgba(255,255,150,0.4)'
+      if (this._selected === ref) cell.style.outline = '2px solid #fff'
 
       if (slot.itemId && slot.count > 0) {
         const item = this.itemRegistry.getItem(slot.itemId)
@@ -54,33 +64,25 @@ export class InventoryUI {
         }
       }
 
-      // Click to pick up / swap slots
       cell.addEventListener('click', () => {
+        const item = slot.itemId ? this.itemRegistry.getItem(slot.itemId) : null
+        if (armorClick && item?.armorSlot && this._selected === null && typeof ref === 'number') {
+          this.inventory.equipArmor(ref, this.itemRegistry)
+          this.refresh()
+          return
+        }
         if (this._selected === null) {
-          if (this.inventory.slots[i].itemId) {
-            this._selected = i
+          if (slot.itemId) {
+            this._selected = ref
             this.refresh()
           }
         } else {
-          this.inventory.swapSlots(this._selected, i)
+          this.inventory.swapSlots(this._selected, ref)
           this._selected = null
           this.refresh()
         }
       })
-
-      // Single click on an armor item equips it straight from the grid
-      if (slot.itemId) {
-        const item = this.itemRegistry.getItem(slot.itemId)
-        if (item?.armorSlot) {
-          cell.addEventListener('dblclick', () => {
-            this.inventory.equipArmor(i, this.itemRegistry)
-            this._selected = null
-            this.refresh()
-          })
-        }
-      }
-
-      this.grid.appendChild(cell)
+      grid.appendChild(cell)
     }
   }
 

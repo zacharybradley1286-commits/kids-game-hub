@@ -32,7 +32,7 @@ const FACE_VERTS = [
 // opaque/cutout one — real translucent water would otherwise write full
 // depth like solid stone and hide anything (fish, sharks, the player's own
 // view of terrain) sitting inside or behind it.
-const LIQUID_BLOCKS = new Set([BLOCK.WATER])
+const LIQUID_BLOCKS = new Set([BLOCK.WATER, BLOCK.LAVA])
 
 // Decorative plants (tall grass, flowers) render as a pair of intersecting
 // vertical quads — like Minecraft's "X" sprite plants — instead of a full

@@ -2,8 +2,12 @@ export const WORLD_W = 1536
 export const WORLD_D = 1536
 export const WORLD_H = 32
 export const CHUNK_W = 16
-export const CHUNKS_X = WORLD_W / CHUNK_W  // 12
-export const CHUNKS_Z = WORLD_D / CHUNK_W  // 12
+export const CHUNKS_X = WORLD_W / CHUNK_W  // 96
+export const CHUNKS_Z = WORLD_D / CHUNK_W  // 96
+// Mesh only chunks this far from the player (circle, in chunks). 6 → ~13×13
+// loaded at once instead of all 9,216. Voxel data for the full 1536 map is
+// still stored; we just don't build GPU meshes for the far side of the island.
+export const CHUNK_LOAD_RADIUS = 6
 export const SURFACE_Y = 14
 export const SEA_LEVEL = 9
 

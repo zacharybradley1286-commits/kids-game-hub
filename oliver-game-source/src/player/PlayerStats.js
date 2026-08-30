@@ -10,6 +10,7 @@ export class PlayerStats {
     this._regenTimer = 0
     this._hungerInterval = 30   // seconds between hunger ticks
     this.damageMult = 1.0       // incoming damage multiplier (set by difficulty)
+    this.difficulty = 'normal'
     this.onDeath = null    // callback
     this.onChange = null   // callback for UI
     this._inventory = null
@@ -23,17 +24,23 @@ export class PlayerStats {
   }
 
   // Call once at new game start — locked in for the run
-  setDifficulty(level) {
+  setDifficulty(level, { resetVitals = true } = {}) {
     const PRESETS = {
       easy:   { maxHealth: 30, hungerInterval: 50, damageMult: 0.5  },
       normal: { maxHealth: 20, hungerInterval: 30, damageMult: 1.0  },
       hard:   { maxHealth: 15, hungerInterval: 20, damageMult: 1.25 },
     }
     const p = PRESETS[level] ?? PRESETS.normal
+    this.difficulty = level in PRESETS ? level : 'normal'
     this.maxHealth = p.maxHealth
-    this.health = p.maxHealth
     this._hungerInterval = p.hungerInterval
     this.damageMult = p.damageMult
+    if (resetVitals) {
+      this.health = p.maxHealth
+      this.hunger = this.maxHunger
+    } else {
+      this.health = Math.min(this.health, this.maxHealth)
+    }
     this.onChange?.()
   }
 
@@ -89,13 +96,20 @@ export class PlayerStats {
   }
 
   serialize() {
-    return { health: this.health, hunger: this.hunger, tier: this.tier }
+    return {
+      health: this.health,
+      hunger: this.hunger,
+      tier: this.tier,
+      difficulty: this.difficulty,
+    }
   }
 
   deserialize(data) {
-    this.health = data.health ?? 20
+    this.setDifficulty(data.difficulty ?? 'normal', { resetVitals: false })
+    this.health = data.health ?? this.maxHealth
     this.hunger = data.hunger ?? 20
     this.tier   = data.tier   ?? 0
     this.dead = false
+    this.onChange?.()
   }
 }

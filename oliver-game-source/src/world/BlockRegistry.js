@@ -83,7 +83,7 @@ export const BLOCK_DB = {
   [BLOCK.PLANKS]:         new BlockType({ id: BLOCK.PLANKS,         name: 'planks',         color: '#c8a44a', hardness: 0.75, atlasCol: 4, atlasRow: 0 }),
   [BLOCK.GLASS]:          new BlockType({ id: BLOCK.GLASS,          name: 'glass',          color: '#aaddff', hardness: 0.3,  isTransparent: true, atlasCol: 1, atlasRow: 3 }),
   [BLOCK.CHEST]:          new BlockType({ id: BLOCK.CHEST,          name: 'chest',          color: '#8b6914', hardness: 0.75, atlasCol: 9, atlasRow: 1 }),
-  [BLOCK.TORCH]:          new BlockType({ id: BLOCK.TORCH,          name: 'torch',          color: '#ffaa00', hardness: 0,    isSolid: false, isTransparent: true, atlasCol: 0, atlasRow: 5 }),
+  [BLOCK.TORCH]:          new BlockType({ id: BLOCK.TORCH,          name: 'torch',          color: '#ffaa00', hardness: 0,    dropItem: 'torch', isSolid: false, isTransparent: true, atlasCol: 0, atlasRow: 5 }),
   [BLOCK.CAMPFIRE]:       new BlockType({ id: BLOCK.CAMPFIRE,       name: 'campfire',       color: '#cc4400', hardness: 0.5,  atlasCol: 7, atlasRow: 5 }),
   [BLOCK.BED]:            new BlockType({ id: BLOCK.BED,            name: 'bed',            color: '#a02020', hardness: 0.3,  atlasCol: 6, atlasRow: 1, atlasTop: [7, 1] }),
   [BLOCK.NETHERRACK]:     new BlockType({ id: BLOCK.NETHERRACK,     name: 'netherrack',     color: '#5a2a20', hardness: 1.0,  minTier: 1, atlasCol: 3, atlasRow: 2 }),

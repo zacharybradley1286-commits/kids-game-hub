@@ -16,8 +16,9 @@ class SoundSystem {
     this._ctx = new (window.AudioContext || window.webkitAudioContext)()
 
     const master = this._ctx.createGain()
-    master.gain.value = 1.0
+    master.gain.value = this._volume ?? 1.0
     master.connect(this._ctx.destination)
+    this._master = master
 
     this._sfxBus = this._ctx.createGain()
     this._sfxBus.gain.value = 0.8
@@ -26,6 +27,35 @@ class SoundSystem {
     this._musicBus = this._ctx.createGain()
     this._musicBus.gain.value = 0.22
     this._musicBus.connect(master)
+  }
+
+  setVolume(v) {
+    this._volume = Math.max(0, Math.min(1, v))
+    this._muted = false
+    if (this._master) this._master.gain.value = this._volume
+  }
+
+  toggleMute() {
+    this._init()
+    this._muted = !this._muted
+    if (this._master) this._master.gain.value = this._muted ? 0 : (this._volume ?? 1)
+    return !this._muted
+  }
+
+  playOink() {
+    this._init()
+    const ctx = this._ctx
+    const now = ctx.currentTime
+    const osc = ctx.createOscillator()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(180, now)
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.18)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.35, now)
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.22)
+    osc.connect(g); g.connect(this._sfxBus)
+    osc.start(now); osc.stop(now + 0.22)
+    this._noise(0.12, 400, 0.15)
   }
 
   _noise(duration, freq, gain) {

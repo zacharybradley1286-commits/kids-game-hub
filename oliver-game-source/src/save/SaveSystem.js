@@ -1,13 +1,14 @@
 const SAVE_KEY = 'oliver_game_save'
 
 export class SaveSystem {
-  constructor(worldData, inventory, playerStats, dayNight, killedBosses, getPlayerPos) {
-    this.worldData = worldData
-    this.inventory = inventory
-    this.stats = playerStats
-    this.dayNight = dayNight
-    this.killedBosses = killedBosses
-    this.getPlayerPos = getPlayerPos
+  constructor(opts) {
+    this.getState = opts.getState  // () => extra blob
+    this.worldData = opts.worldData
+    this.inventory = opts.inventory
+    this.stats = opts.playerStats
+    this.dayNight = opts.dayNight
+    this.killedBosses = opts.killedBosses
+    this.getPlayerPos = opts.getPlayerPos
   }
 
   hasSave() {
@@ -16,8 +17,9 @@ export class SaveSystem {
 
   save() {
     const pos = this.getPlayerPos()
+    const extra = this.getState ? this.getState() : {}
     const data = {
-      version: 1,
+      version: 2,
       worldData: this.worldData.serialize(),
       inventory: this.inventory.serialize(),
       playerStats: this.stats.serialize(),
@@ -25,6 +27,7 @@ export class SaveSystem {
       timeOfDay: this.dayNight.timeOfDay,
       killedBosses: [...this.killedBosses],
       playerPos: { x: pos.x, y: pos.y, z: pos.z },
+      ...extra,
     }
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(data))
@@ -56,6 +59,7 @@ export class SaveSystem {
     if (data.playerPos && playerController) {
       playerController.camera.position.set(data.playerPos.x, data.playerPos.y, data.playerPos.z)
     }
+    return data
   }
 
   clear() {

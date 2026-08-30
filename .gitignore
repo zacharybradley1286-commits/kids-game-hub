@@ -1,3 +1,5 @@
 .vercel
 .env*
 node_modules
+oliver-game-source/dist
+oliver-game-source/node_modules

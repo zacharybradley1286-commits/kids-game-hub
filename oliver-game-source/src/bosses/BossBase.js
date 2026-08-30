@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { GRAVITY } from '../constants.js'
+import { GRAVITY, WORLD_W, WORLD_D } from '../constants.js'
 import { sounds } from '../systems/SoundSystem.js'
 
 export function mkBox(w, h, d, color, emissiveHex, emissiveIntensity) {
@@ -135,8 +135,8 @@ export class BossBase {
     this.position.x += (dx / dist) * speed * dt
     this.position.z += (dz / dist) * speed * dt
     // Clamp to world bounds so bosses can't walk off the edge
-    this.position.x = Math.max(2, Math.min(190, this.position.x))
-    this.position.z = Math.max(2, Math.min(190, this.position.z))
+    this.position.x = Math.max(2, Math.min(WORLD_W - 2, this.position.x))
+    this.position.z = Math.max(2, Math.min(WORLD_D - 2, this.position.z))
     this.mesh.rotation.y = Math.atan2(dx, dz)
   }
 

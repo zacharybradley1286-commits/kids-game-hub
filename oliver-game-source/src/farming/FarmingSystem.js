@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { BLOCK } from '../world/BlockRegistry.js'
-import { findCropBySeed } from './CropRegistry.js'
+import { CROP_DB, findCropBySeed } from './CropRegistry.js'
 
 class GrowingCrop {
   constructor(cropType, worldPos, scene) {
@@ -35,6 +35,7 @@ export class FarmingSystem {
     this.scene = scene
     this._crops = []   // list of GrowingCrop
     this.onHarvest = null  // callback(itemId, count)
+    this.onPlant = null
   }
 
   plant(itemId, worldPos, inventory, itemRegistry) {
@@ -49,6 +50,7 @@ export class FarmingSystem {
     inventory.remove(itemId, 1)
     const crop = new GrowingCrop(cropType, [bx, by, bz], this.scene)
     this._crops.push(crop)
+    this.onPlant?.(itemId)
     return true
   }
 
@@ -75,8 +77,14 @@ export class FarmingSystem {
 
     this.scene.remove(crop.mesh)
     crop.mesh.geometry.dispose()
+    crop.mesh.material.dispose()
     this._crops.splice(idx, 1)
-    return { itemId: crop.cropType.harvestItem, count: crop.cropType.harvestCount }
+    return {
+      itemId: crop.cropType.harvestItem,
+      count: crop.cropType.harvestCount,
+      seedItem: crop.cropType.seedItem,
+      seedCount: crop.cropType.seedDrop ?? 0,
+    }
   }
 
   removeCropAt(worldPos) {
@@ -86,6 +94,39 @@ export class FarmingSystem {
     const crop = this._crops[idx]
     this.scene.remove(crop.mesh)
     crop.mesh.geometry.dispose()
+    crop.mesh.material.dispose()
     this._crops.splice(idx, 1)
+  }
+
+  setVisible(v) {
+    for (const c of this._crops) c.mesh.visible = v
+  }
+
+  serialize() {
+    return this._crops.map(c => ({
+      id: c.cropType.id,
+      pos: c.worldPos,
+      stage: c.stage,
+      timer: c.timer,
+    }))
+  }
+
+  deserialize(list, scene) {
+    for (const c of this._crops) {
+      this.scene.remove(c.mesh)
+      c.mesh.geometry.dispose()
+      c.mesh.material.dispose()
+    }
+    this._crops = []
+    if (!list) return
+    for (const raw of list) {
+      const cropType = CROP_DB[raw.id]
+      if (!cropType) continue
+      const crop = new GrowingCrop(cropType, raw.pos, scene ?? this.scene)
+      crop.stage = raw.stage ?? 0
+      crop.timer = raw.timer ?? 0
+      crop.updateVisual()
+      this._crops.push(crop)
+    }
   }
 }

@@ -16,6 +16,10 @@ export class MiningSystem {
     this._mineSoundTimer = 0
     this.onBreakProgress = null  // callback(fraction)
     this.onPickup = null         // callback(itemName)
+    this.onOverflow = null       // callback(itemId, count) when inventory is full
+    this.onBroke = null          // callback(block, dropId)
+    this.isOccupied = null       // callback(x,y,z) — player body cells
+    this.removeCropAt = null     // callback([x,y,z])
   }
 
   beginBreak(worldPos) {
@@ -89,6 +93,8 @@ export class MiningSystem {
     // while leaving the break progress UI reset, making blocks appear
     // unbreakable.
     this.worldData.set(bx, by, bz, BLOCK.AIR)
+    this.removeCropAt?.([bx, by, bz])
+    this.removeCropAt?.([bx, by - 1, bz])
     const cx = Math.floor(bx / CHUNK_W)
     const cz = Math.floor(bz / CHUNK_W)
     this.worldRenderer.rebuildChunk(cx, cz)
@@ -107,8 +113,10 @@ export class MiningSystem {
     const item = this.itemRegistry.getItem(dropId)
     if (item) {
       try {
-        this.inventory.add(dropId, block.dropCount, this.itemRegistry)
+        const leftover = this.inventory.add(dropId, block.dropCount, this.itemRegistry)
+        if (leftover > 0) this.onOverflow?.(dropId, leftover)
         this.onPickup?.(item.name)
+        this.onBroke?.(block, dropId)
       } catch (e) {
         console.error('Failed to add mined item to inventory:', e)
       }
@@ -139,6 +147,7 @@ export class MiningSystem {
     const [bx, by, bz] = worldPos
     if (!this.worldData.inBounds(bx, by, bz)) return false
     if (this.worldData.get(bx, by, bz) !== BLOCK.AIR) return false
+    if (this.isOccupied?.(bx, by, bz)) return false
     this.worldData.set(bx, by, bz, blockId)
     const cx = Math.floor(bx / CHUNK_W)
     const cz = Math.floor(bz / CHUNK_W)

@@ -102,6 +102,10 @@ export class PassiveSpawner {
     this._spawnTimer = 0
     this._initialised = false
     this._companionSpawned = false
+    this.companion = null
+    this.onCompanionDeath = null
+    this._isNight = false
+    this.allowSpawn = true
   }
 
   // Call once when day begins (or game starts)
@@ -122,14 +126,15 @@ export class PassiveSpawner {
     for (let i = this.mobs.length - 1; i >= 0; i--) {
       const { mob, ai } = this.mobs[i]
       if (mob.dead) {
+        if (mob.isCompanion) this.companion = null
         this.mobs.splice(i, 1)
         continue
       }
       ai.update(dt)
     }
 
-    // Only spawn more during the day
-    if (!this._isNight) {
+    // Only spawn more during the day, and only in the overworld
+    if (!this._isNight && this.allowSpawn) {
       if (this.mobs.length < MAX_PASSIVE) {
         this._spawnTimer += dt
         if (this._spawnTimer >= 8) {  // one every 8s at day
@@ -149,7 +154,10 @@ export class PassiveSpawner {
       if (sy >= 0) {
         spawnPos.y = sy + 1
         const mob = new MobBase(MOB_DB.pig, spawnPos, this.scene)
+        mob.isCompanion = true
+        mob.displayName = 'Hammy'
         mob.onDeath = (deadMob) => {
+          this.onCompanionDeath?.(deadMob)
           for (const drop of deadMob.mobType.dropItems) {
             if (Math.random() < drop.chance) {
               this.inventory.add(drop.itemId, drop.count, this.itemRegistry)
@@ -158,6 +166,7 @@ export class PassiveSpawner {
         }
         const ai = new PassiveAI(mob, this.worldData, this.player)
         this.mobs.push({ mob, ai })
+        this.companion = { mob, ai }
         this._companionSpawned = true
       }
     }
@@ -199,5 +208,41 @@ export class PassiveSpawner {
 
   getMobs() {
     return this.mobs.map(m => m.mob)
+  }
+
+  getCompanion() {
+    return this.companion?.mob && !this.companion.mob.dead ? this.companion.mob : null
+  }
+
+  setWorldData(worldData) {
+    this.worldData = worldData
+    for (const { ai } of this.mobs) ai.worldData = worldData
+  }
+
+  despawnAllExceptCompanion() {
+    const keep = []
+    for (const entry of this.mobs) {
+      if (entry.mob.isCompanion && !entry.mob.dead) keep.push(entry)
+      else entry.mob.dispose()
+    }
+    this.mobs = keep
+    this.companion = keep[0] ?? null
+  }
+
+  bringCompanionTo(x, y, z) {
+    const pig = this.getCompanion()
+    if (!pig) return
+    pig.mesh.position.set(x + 1.5, y, z)
+    pig.mesh.visible = true
+  }
+
+  warnIfDanger(hostiles, playerPos) {
+    const pig = this.getCompanion()
+    if (!pig) return false
+    for (const h of hostiles) {
+      if (h.dead) continue
+      if (h.position.distanceTo(playerPos) < 12) return true
+    }
+    return false
   }
 }

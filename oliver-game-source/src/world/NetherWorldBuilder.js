@@ -1,4 +1,4 @@
-import { WORLD_W, WORLD_D, WORLD_H } from '../constants.js'
+import { WORLD_W, WORLD_D, WORLD_H, CHUNK_W } from '../constants.js'
 import { BLOCK } from './BlockRegistry.js'
 
 // Shares the overworld's exact dimensions (WORLD_W x WORLD_D x WORLD_H) and
@@ -23,22 +23,54 @@ function crustTop(x, z) {
   return 6 + Math.round(Math.sin(x * 0.08) * 1.5 + Math.cos(z * 0.08) * 1.5)
 }
 
+function hash(x, z) {
+  let h = Math.imul(x * 1664525 + z, 22695477) + 1013904223
+  h ^= h >>> 16
+  h = Math.imul(h, 0x45d9f3b)
+  h ^= h >>> 16
+  return (h >>> 0) / 4294967295
+}
+
+function fillNetherColumn(worldData, x, z) {
+  const top = crustTop(x, z)
+  for (let y = 0; y < WORLD_H; y++) {
+    if (y === 0) worldData.set(x, y, z, BLOCK.NETHERRACK)
+    else if (y <= LAVA_TOP) worldData.set(x, y, z, BLOCK.LAVA)
+    else if (y <= top) worldData.set(x, y, z, BLOCK.NETHERRACK)
+    else if (y >= ROOF_START) worldData.set(x, y, z, BLOCK.NETHERRACK)
+    else worldData.set(x, y, z, BLOCK.AIR)
+  }
+  // Local caves / glowstone / lava pools — seeded per column so we can
+  // generate a chunk on demand instead of the whole 1536² nether at once.
+  if (hash(x, z * 3) > 0.82) {
+    const cy = Math.min(top - 1, LAVA_TOP + 1 + Math.floor(hash(x + 9, z) * 3))
+    if (cy > LAVA_TOP) worldData.set(x, cy, z, BLOCK.AIR)
+  }
+  if (hash(x + 50, z + 50) > 0.97) worldData.set(x, ROOF_START, z, BLOCK.GLOWSTONE)
+  if (hash(x + 77, z + 11) > 0.985 && worldData.get(x, top + 1, z) === BLOCK.AIR) {
+    worldData.set(x, top + 1, z, BLOCK.LAVA)
+  }
+}
+
+export function ensureNetherChunk(worldData, cx, cz) {
+  if (!worldData._netherGen) worldData._netherGen = new Set()
+  const key = `${cx},${cz}`
+  if (worldData._netherGen.has(key)) return
+  worldData._netherGen.add(key)
+  const ox = cx * CHUNK_W, oz = cz * CHUNK_W
+  for (let lx = 0; lx < CHUNK_W; lx++) {
+    for (let lz = 0; lz < CHUNK_W; lz++) {
+      const x = ox + lx, z = oz + lz
+      if (x < 0 || z < 0 || x >= WORLD_W || z >= WORLD_D) continue
+      fillNetherColumn(worldData, x, z)
+    }
+  }
+}
+
 export function buildNether(worldData) {
   for (let x = 0; x < WORLD_W; x++) {
     for (let z = 0; z < WORLD_D; z++) {
-      const top = crustTop(x, z)
-      for (let y = 0; y < WORLD_H; y++) {
-        if (y <= LAVA_TOP) {
-          worldData.set(x, y, z, BLOCK.LAVA)
-        } else if (y <= top) {
-          worldData.set(x, y, z, BLOCK.NETHERRACK)
-        } else if (y >= ROOF_START) {
-          worldData.set(x, y, z, BLOCK.NETHERRACK)
-        } else {
-          worldData.set(x, y, z, BLOCK.AIR)
-        }
-      }
-      worldData.set(x, 0, z, BLOCK.NETHERRACK) // solid base under the lava sea
+      fillNetherColumn(worldData, x, z)
     }
   }
 
@@ -131,5 +163,9 @@ export function ensurePortalAt(worldData, x, z) {
   }
   worldData.set(x, y + 2, z, BLOCK.PORTAL)
   worldData.set(x, y + 3, z, BLOCK.PORTAL)
+  // A welcome chest so the Nether trip has a reason besides "it's on fire"
+  if (worldData.get(x + 2, y + 1, z + 1) === BLOCK.AIR) {
+    worldData.set(x + 2, y + 1, z + 1, BLOCK.CHEST)
+  }
   return y
 }

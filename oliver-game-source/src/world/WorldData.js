@@ -38,10 +38,19 @@ export class WorldData {
            bid !== BLOCK.TALL_GRASS && bid !== BLOCK.FLOWER && bid !== BLOCK.CORAL && bid !== BLOCK.KELP
   }
 
-  // Find the topmost solid block Y at (x, z), returns -1 if none
+  // Find the topmost non-air block Y at (x, z), returns -1 if none.
+  // Includes water/plants — use solidSurfaceY for standing/spawning.
   surfaceY(x, z) {
     for (let y = WORLD_H - 1; y >= 0; y--) {
       if (this.get(x, y, z) !== BLOCK.AIR) return y
+    }
+    return -1
+  }
+
+  // Topmost block that actually supports standing (not water, lava, plants).
+  solidSurfaceY(x, z) {
+    for (let y = WORLD_H - 1; y >= 0; y--) {
+      if (this.isSolid(x, y, z)) return y
     }
     return -1
   }

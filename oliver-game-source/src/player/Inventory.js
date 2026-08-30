@@ -17,6 +17,9 @@ export class Inventory {
     for (const s of ARMOR_SLOTS) this.armor[s] = new InventorySlot()
     this.hotbarIndex = 0
     this._changeListeners = []
+    // Companion pig saddle-bags — 9 extra slots, shown in the inventory UI.
+    this.PIG_SIZE = 9
+    this.pigSlots = Array.from({ length: this.PIG_SIZE }, () => new InventorySlot())
   }
 
   // Equip an armor item straight from a main-inventory slot into its armor slot.
@@ -158,14 +161,19 @@ export class Inventory {
     this._fireChange()
   }
 
+  _slotRef(ref) {
+    if (typeof ref === 'number') return this.slots[ref]
+    if (typeof ref === 'string' && ref[0] === 'p') return this.pigSlots[parseInt(ref.slice(1), 10)]
+    return null
+  }
+
   swapSlots(a, b) {
-    const tmp = { itemId: this.slots[a].itemId, count: this.slots[a].count, durability: this.slots[a].durability }
-    this.slots[a].itemId    = this.slots[b].itemId
-    this.slots[a].count     = this.slots[b].count
-    this.slots[a].durability = this.slots[b].durability
-    this.slots[b].itemId    = tmp.itemId
-    this.slots[b].count     = tmp.count
-    this.slots[b].durability = tmp.durability
+    const sa = this._slotRef(a)
+    const sb = this._slotRef(b)
+    if (!sa || !sb) return
+    const tmp = { itemId: sa.itemId, count: sa.count, durability: sa.durability }
+    sa.itemId = sb.itemId; sa.count = sb.count; sa.durability = sb.durability
+    sb.itemId = tmp.itemId; sb.count = tmp.count; sb.durability = tmp.durability
     this._fireChange()
   }
 
@@ -177,6 +185,7 @@ export class Inventory {
     return {
       slots: this.slots.map(s => ({ itemId: s.itemId, count: s.count, durability: s.durability })),
       armor,
+      pigSlots: this.pigSlots.map(s => ({ itemId: s.itemId, count: s.count, durability: s.durability })),
     }
   }
 
@@ -196,6 +205,25 @@ export class Inventory {
         this.armor[s].durability = armor[s]?.durability ?? null
       }
     }
+    const pig = Array.isArray(data) ? null : data?.pigSlots
+    if (pig) {
+      for (let i = 0; i < Math.min(pig.length, this.PIG_SIZE); i++) {
+        this.pigSlots[i].itemId = pig[i].itemId
+        this.pigSlots[i].count = pig[i].count
+        this.pigSlots[i].durability = pig[i].durability
+      }
+    }
     this._fireChange()
+  }
+
+  // Dump pig bags into the world when the companion dies.
+  drainPigSlots() {
+    const out = []
+    for (const s of this.pigSlots) {
+      if (s.itemId && s.count > 0) out.push({ itemId: s.itemId, count: s.count })
+      s.itemId = null; s.count = 0; s.durability = null
+    }
+    this._fireChange()
+    return out
   }
 }

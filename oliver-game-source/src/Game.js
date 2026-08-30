@@ -3,8 +3,8 @@ import { BLOCK_DB } from './world/BlockRegistry.js'
 import { WorldData } from './world/WorldData.js'
 import { WorldRenderer } from './world/WorldRenderer.js'
 import { buildIsland } from './world/WorldBuilder.js'
-import { buildNether, ensurePortalAt } from './world/NetherWorldBuilder.js'
-import { WORLD_W, WORLD_D } from './constants.js'
+import { ensurePortalAt, ensureNetherChunk } from './world/NetherWorldBuilder.js'
+import { WORLD_W, WORLD_D, CHUNK_W } from './constants.js'
 import { PlayerStats } from './player/PlayerStats.js'
 import { Inventory } from './player/Inventory.js'
 import { PlayerController } from './player/PlayerController.js'
@@ -28,8 +28,10 @@ import { CraftingUI } from './crafting/CraftingUI.js'
 import { DroppedItemManager } from './items/DroppedItemManager.js'
 import { SeaLifeSpawner } from './mobs/SeaLifeSpawner.js'
 import { SaveSystem } from './save/SaveSystem.js'
+import { ChestSystem } from './world/ChestSystem.js'
+import { QuestSystem } from './ui/QuestSystem.js'
 
-const STATE = { MENU: 'menu', PLAYING: 'playing', DEAD: 'dead', WIN: 'win' }
+const STATE = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused', DEAD: 'dead', WIN: 'win' }
 
 export class Game {
   constructor(renderer) {
@@ -44,7 +46,7 @@ export class Game {
     this.scene.fog = new THREE.FogExp2(0x99bbff, 0.007)
 
     // Camera
-    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1200)
+    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 220)
 
     // Lighting
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
@@ -82,6 +84,7 @@ export class Game {
     this._atlasTex = atlasTex   // kept around to build the Nether's renderer lazily
 
     this.worldRenderer = new WorldRenderer(this.scene, this.worldData, atlasTex)
+    this.worldRenderer.streamAround(WORLD_W / 2, WORLD_D / 2, 200)
 
     // Dimensions — the Nether shares the overworld's exact size and a 1:1
     // coordinate mapping with it (see NetherWorldBuilder.js), and is only
@@ -110,6 +113,17 @@ export class Game {
       this.worldData, this.worldRenderer, this.inventory, this.stats, this.itemRegistry
     )
     this.miningSystem.onPickup = (name) => this.hud.showPickup(name)
+    this.miningSystem.onOverflow = (id, n) => this._dropNearPlayer(id, n)
+    this.miningSystem.onBroke = (block, dropId) => this.quests.noteMine(dropId, block.dropCount ?? 1)
+    this.miningSystem.removeCropAt = (pos) => this.farmingSystem.removeCropAt(pos)
+    this.miningSystem.isOccupied = (x, y, z) => this.player.occupies(x, y, z)
+    this.farmingSystem.onPlant = (id) => this.quests.notePlant(id)
+
+    this.chests = new ChestSystem()
+    this.quests = new QuestSystem()
+    this.spawnPoint = null
+    this._playReady = false
+    this._oinkTimer = 0
 
     // Player controller
     this.player = new PlayerController(
@@ -117,6 +131,14 @@ export class Game {
       this.stats, this.inventory, this.miningSystem, this.farmingSystem,
       this.hotbar, this.hud, this.itemRegistry
     )
+    this.player.scene = this.scene
+    this.player.getDimension = () => this.currentDimension
+    this.player.onOverflow = (id, n) => this._dropNearPlayer(id, n)
+    this.player.onOpenChest = (x, y, z) => this._openChest(x, y, z)
+    this.player.onSetSpawn = (pos) => {
+      this.spawnPoint = { ...pos, dim: this.currentDimension }
+      this._showMsg('Home set. You will wake up here.')
+    }
 
     // Inventory + crafting UI
     this.inventoryUI = new InventoryUI(this.inventory, this.itemRegistry)
@@ -127,7 +149,6 @@ export class Game {
       this.killedBosses
     )
     this.craftingUI.onCraft = (recipe) => {
-      // Update player tier based on crafted item
       const item = this.itemRegistry.getItem(recipe.resultItem)
       if (item) this.stats.updateTier(item)
       if (recipe.resultItem === 'summoning_stone') {
@@ -161,6 +182,12 @@ export class Game {
     this.passiveSpawner = new PassiveSpawner(
       this.scene, this.worldData, this.inventory, this.itemRegistry, this.player
     )
+    this.passiveSpawner.onCompanionDeath = () => {
+      for (const drop of this.inventory.drainPigSlots()) {
+        this._dropNearPlayer(drop.itemId, drop.count)
+      }
+      this._showMsg('Hammy... you will be missed.')
+    }
 
     // Sea life — fish and sharks confined to the ocean biome (see WorldBuilder's
     // _addOceanBiome and SeaLifeSpawner.js)
@@ -215,11 +242,28 @@ export class Game {
     // Nether portal interaction
     this.player.onUsePortal = () => this._usePortal()
 
+    this.quests.onComplete = (q) => {
+      for (const [id, n] of Object.entries(q.reward ?? {})) this._giveOrDrop(id, n)
+      this._showMsg(`Quest complete: ${q.name}!`)
+      this.hud.refreshQuests(this.quests)
+    }
+
     // Save system
-    this.saveSystem = new SaveSystem(
-      this.worldData, this.inventory, this.stats, this.dayNight,
-      this.killedBosses, () => this.camera.position
-    )
+    this.saveSystem = new SaveSystem({
+      worldData: this.overworldData,
+      inventory: this.inventory,
+      playerStats: this.stats,
+      dayNight: this.dayNight,
+      killedBosses: this.killedBosses,
+      getPlayerPos: () => this.camera.position,
+      getState: () => ({
+        spawnPoint: this.spawnPoint,
+        chests: this.chests.serialize(),
+        crops: this.farmingSystem.serialize(),
+        quests: this.quests.serialize(),
+        currentDimension: this.currentDimension,
+      }),
+    })
 
     // Key bindings for UI overlays
     this._setupUIKeys()
@@ -247,9 +291,22 @@ export class Game {
       this.saveSystem.clear()
       location.reload()
     })
+    document.getElementById('btn-resume')?.addEventListener('click', () => this._resume())
+    document.getElementById('btn-save-quit')?.addEventListener('click', () => {
+      this.saveSystem.save()
+      location.reload()
+    })
+    document.getElementById('vol-slider')?.addEventListener('input', (e) => {
+      sounds.setVolume(Number(e.target.value) / 100)
+    })
+    document.getElementById('vol-toggle')?.addEventListener('click', () => {
+      const on = sounds.toggleMute()
+      document.getElementById('vol-toggle').textContent = on ? '🔊' : '🔇'
+    })
   }
 
   _startNewGame(difficulty = 'normal') {
+    this.killedBosses.clear()
     this.stats.setDifficulty(difficulty)
     document.getElementById('menu-screen').style.display = 'none'
     this.state = STATE.PLAYING
@@ -259,19 +316,19 @@ export class Game {
   _loadGame() {
     const data = this.saveSystem.load()
     if (!data) { this._startNewGame(); return }
-    // Remove old world meshes before rebuilding with saved data
-    for (const r of this.worldRenderer.chunks.values()) {
-      if (r.mesh) this.scene.remove(r.mesh)
-    }
-    this.saveSystem.apply(data, this.player)
-    // _buildAll adds meshes to scene internally
-    this.worldRenderer._buildAll()
+    this.worldRenderer.disposeAll()
+    const applied = this.saveSystem.apply(data, this.player)
+    this.chests.deserialize(applied?.chests ?? data.chests)
+    this.farmingSystem.deserialize(applied?.crops ?? data.crops)
+    this.quests.deserialize(applied?.quests ?? data.quests)
+    this.spawnPoint = data.spawnPoint ?? null
+    this.worldRenderer.streamAround(this.camera.position.x, this.camera.position.z, 200)
     document.getElementById('menu-screen').style.display = 'none'
     this.state = STATE.PLAYING
-    this._enterPlayMode()
+    this._enterPlayMode({ isLoad: true })
   }
 
-  _enterPlayMode() {
+  _enterPlayMode({ isLoad = false } = {}) {
     sounds.startMusic()
     this.hud.show()
     this.hotbar.show()
@@ -279,62 +336,50 @@ export class Game {
     this.hud.updateHealth(this.stats.health, this.stats.maxHealth)
     this.hud.updateHunger(this.stats.hunger, this.stats.maxHunger)
     this.hotbar.refresh()
+    this.hud.refreshQuests(this.quests)
 
-    // Mark all mini-bosses killed so summoning stone recipe is always available
-    this.killedBosses.add('cave_troll')
-    this.killedBosses.add('swamp_witch')
-    this.killedBosses.add('stone_golem')
-
-    // Give starting items
-    if (this.inventory.countOf('wood_log') === 0) {
-      this.inventory.add('wood_log', 10, this.itemRegistry)
+    if (!isLoad && this.inventory.countOf('wood_log') === 0) {
+      this.inventory.add('wood_log', 8, this.itemRegistry)
       this.inventory.add('planks', 8, this.itemRegistry)
-      this.inventory.add('stick', 8, this.itemRegistry)
+      this.inventory.add('stick', 4, this.itemRegistry)
+      this.inventory.add('wooden_axe', 1, this.itemRegistry)
+      this.inventory.add('wooden_pickaxe', 1, this.itemRegistry)
       this.inventory.add('wheat_seed', 6, this.itemRegistry)
       this.inventory.add('carrot_seed', 4, this.itemRegistry)
       this.inventory.add('potato_seed', 4, this.itemRegistry)
       this.inventory.add('bread', 3, this.itemRegistry)
-      this.inventory.add('crystal_sword', 1, this.itemRegistry)
-      this.inventory.add('wooden_shovel', 1, this.itemRegistry)
-      this.inventory.add('troll_fang', 1, this.itemRegistry)
-      this.inventory.add('witch_eye', 1, this.itemRegistry)
-      this.inventory.add('golem_core', 1, this.itemRegistry)
-
-      // Start already wearing a full set of crystal armor
-      this.inventory.armor.helmet.itemId = 'crystal_helmet'
-      this.inventory.armor.helmet.count = 1
-      this.inventory.armor.chestplate.itemId = 'crystal_chestplate'
-      this.inventory.armor.chestplate.count = 1
-      this.inventory.armor.leggings.itemId = 'crystal_leggings'
-      this.inventory.armor.leggings.count = 1
-      this.inventory.armor.boots.itemId = 'crystal_boots'
-      this.inventory.armor.boots.count = 1
     }
 
-    // Lock pointer on click
-    this.renderer.domElement.addEventListener('click', () => {
-      if (this.state === STATE.PLAYING &&
-          !this.inventoryUI.visible && !this.craftingUI.visible) {
-        this.player.lock()
+    if (!this._playReady) {
+      this.renderer.domElement.addEventListener('click', () => {
+        if (this.state === STATE.PLAYING &&
+            !this.inventoryUI.visible && !this.craftingUI.visible) {
+          this.player.lock()
+        }
+      })
+      this._setupSky()
+      this._setupBlockOutline()
+      this._setupMiniBosses()
+      this._playReady = true
+    }
+
+    if (!this.spawnPoint) {
+      this.spawnPoint = {
+        x: this.camera.position.x,
+        y: this.camera.position.y,
+        z: this.camera.position.z,
+        dim: 'overworld',
       }
-    }, { once: false })
-
-    this._showMsg('Stranded! Gather wood, build tools, survive the night.')
-
-    // Sky elements + block outline
-    this._setupSky()
-    this._setupBlockOutline()
-
-    // Spawn passive animals at game start
+    }
     this.passiveSpawner.init()
     this.seaLife.init()
-
-    // Spawn the mini-bosses in their zones
-    this._setupMiniBosses()
+    this._showMsg(isLoad
+      ? 'Welcome back. The island is waiting.'
+      : 'Stranded! Gather wood, build tools, survive the night.')
   }
 
   _setupMiniBosses() {
-    // World is 3072x3072, up from the original 192x192 — every boss position
+    // World is 1536x1536, scaled 8x from the original 192x192 — every boss position
     // below is scaled by the same factor as WorldBuilder's terrain features
     // (see SCALE in WorldBuilder.js) so they land in the right biome. The
     // Stone Golem was also moved off the main (NW) mountain onto the second
@@ -346,22 +391,30 @@ export class Game {
     const trollPos = new THREE.Vector3(30*BOSS_SCALE, 4, 30*BOSS_SCALE)
     const caveTroll = new BossCave(trollPos, this.scene, this.player, this.inventory, this.itemRegistry, this.mobSpawner)
     caveTroll.onDeath = () => this._onMiniBossKilled('cave_troll', 'Cave Troll', 'Swamp Witch')
-    this.activeBoss = caveTroll  // allow attacking immediately
-    this._bossList = [caveTroll]
+    this._bossList = []
+    const keep = (id, boss) => {
+      if (this.killedBosses.has(id)) {
+        boss.dead = true
+        this.scene.remove(boss.mesh)
+        return
+      }
+      this._bossList.push(boss)
+    }
+    keep('cave_troll', caveTroll)
 
     // Swamp Witch — deep in swamp SE
     const witchPos = new THREE.Vector3(138*BOSS_SCALE, 13, 138*BOSS_SCALE)
     const swampWitch = new BossSwamp(witchPos, this.scene, this.player, this.inventory, this.itemRegistry)
     swampWitch.onDeath = () => this._onMiniBossKilled('swamp_witch', 'Swamp Witch', 'Stone Golem')
-    this._bossList.push(swampWitch)
+    keep('swamp_witch', swampWitch)
 
     // Stone Golem — on the second (NE) mountain peak, away from the Cave Troll
     const golemPos = new THREE.Vector3(150*BOSS_SCALE, 20, 44*BOSS_SCALE)
     const stoneGolem = new BossMountain(golemPos, this.scene, this.player, this.inventory, this.itemRegistry)
     stoneGolem.onDeath = () => this._onMiniBossKilled('stone_golem', 'Stone Golem', null)
-    this._bossList.push(stoneGolem)
+    keep('stone_golem', stoneGolem)
 
-    // Dynamic boss bar — show closest boss
+    this.activeBoss = this._bossList[0] ?? null
     this._activeBossList = this._bossList
   }
 
@@ -426,10 +479,10 @@ export class Game {
     // running would otherwise appear floating in whichever world you just
     // stepped into.
     this.mobSpawner._despawnAll()
-    for (const { mob } of this.passiveSpawner.mobs) mob.dispose()
-    this.passiveSpawner.mobs = []
+    this.passiveSpawner.despawnAllExceptCompanion()
     this.seaLife.clear()
     this.droppedItems.clear()
+    this.farmingSystem.setVisible(target === 'overworld')
     for (const boss of this._activeBossList ?? []) boss.mesh.visible = (target === 'overworld')
     if (this._sun) this._sun.visible = (target === 'overworld')
     if (this._moon) this._moon.visible = (target === 'overworld')
@@ -441,8 +494,9 @@ export class Game {
     if (nether) {
       if (!this.netherData) {
         this.netherData = new WorldData()
-        buildNether(this.netherData)
-        this.netherRenderer = new WorldRenderer(this.scene, this.netherData, this._atlasTex)
+        this.netherRenderer = new WorldRenderer(this.scene, this.netherData, this._atlasTex, {
+          ensureChunkData: (cx, cz) => ensureNetherChunk(this.netherData, cx, cz),
+        })
       }
       this.worldData = this.netherData
       this.worldRenderer = this.netherRenderer
@@ -472,17 +526,27 @@ export class Game {
     this.farmingSystem.worldData = this.worldData
     this.mobSpawner.worldData = this.worldData
     this.seaLife.worldData = this.worldData
+    this.passiveSpawner.setWorldData(this.worldData)
+    this.passiveSpawner.allowSpawn = !nether
     this.minimap.setWorldData(this.worldData)
 
     // Land one cell off from the portal's own coordinates, not on top of
     // it — the portal block itself is solid (see BlockRegistry), so
     // spawning exactly on its cell would spawn the player inside it.
+    if (nether) {
+      const cx = Math.floor(x / CHUNK_W), cz = Math.floor(z / CHUNK_W)
+      ensureNetherChunk(this.worldData, cx, cz)
+      ensureNetherChunk(this.worldData, cx, cz + 1)
+    }
     const landY = nether
       ? ensurePortalAt(this.worldData, x, z)
-      : Math.max(0, this.worldData.surfaceY(x, z))
+      : Math.max(0, this.worldData.solidSurfaceY?.(x, z) ?? this.worldData.surfaceY(x, z))
+    this.worldRenderer.streamAround(x, z, 200)
+    this.worldRenderer.rebuildChunk(Math.floor(x / CHUNK_W), Math.floor(z / CHUNK_W))
     const landZ = nether ? z + 1 : z
     this.player.camera.position.set(x + 0.5, landY + 1.8, landZ + 0.5)
     this.player._vy = 0
+    this.passiveSpawner.bringCompanionTo(x + 0.5, landY + 1, landZ + 0.5)
 
     // No day/night in the Nether — force hostile spawns on for the visit.
     // The overworld clock is paused for the duration (see update()), so on
@@ -490,19 +554,28 @@ export class Game {
     this.mobSpawner.setNight(nether ? true : this.dayNight.isNight)
 
     this._showMsg(nether
-      ? 'You step through into a hostile, burning world...'
+      ? 'You step through into a hostile, burning world. Find the chest by the portal.'
       : 'You stumble back into daylight.')
   }
 
   _onPlayerDeath() {
-    this.state = STATE.DEAD
-    this.saveSystem.clear()
     this.player.controls.unlock()
-    document.getElementById('end-screen').style.display = 'flex'
-    document.getElementById('end-title').textContent = '💀 YOU DIED'
-    document.getElementById('end-title').style.color = '#e74c3c'
-    document.getElementById('end-msg').textContent =
-      'The island claimed you. Try again.'
+    this.stats.dead = false
+    this.stats.health = Math.max(6, Math.floor(this.stats.maxHealth * 0.5))
+    this.stats.hunger = Math.max(8, this.stats.hunger)
+    this.stats.onChange?.()
+    const spawn = this.spawnPoint && this.spawnPoint.dim === this.currentDimension
+      ? this.spawnPoint
+      : {
+          x: WORLD_W / 2 + 0.5,
+          y: (this.worldData.solidSurfaceY?.(WORLD_W / 2, WORLD_D / 2) ?? 14) + 1.8,
+          z: WORLD_D / 2 + 0.5,
+        }
+    this.camera.position.set(spawn.x, spawn.y, spawn.z)
+    this.player._vy = 0
+    this.state = STATE.PLAYING
+    this.saveSystem.save()
+    this._showMsg('You wake up at home, a little worse for wear.')
   }
 
   _setupUIKeys() {
@@ -525,15 +598,72 @@ export class Game {
           this.player.lock()
         }
       }
+      if (e.code === 'KeyJ' && this.state === STATE.PLAYING) {
+        this.hud.toggleQuests()
+      }
       if (e.code === 'Escape') {
-        this.inventoryUI.hide()
-        this.craftingUI.hide()
+        if (this.inventoryUI.visible || this.craftingUI.visible) {
+          this.inventoryUI.hide()
+          this.craftingUI.hide()
+          if (this.state === STATE.PLAYING) this.player.lock()
+          return
+        }
+        if (this.state === STATE.PLAYING) this._pause()
+        else if (this.state === STATE.PAUSED) this._resume()
       }
     })
   }
 
+  _pause() {
+    this.state = STATE.PAUSED
+    this.player.controls.unlock()
+    sounds.stopMusic()
+    const el = document.getElementById('pause-screen')
+    if (el) el.style.display = 'flex'
+  }
+
+  _resume() {
+    const el = document.getElementById('pause-screen')
+    if (el) el.style.display = 'none'
+    this.state = STATE.PLAYING
+    sounds.startMusic()
+    this.player.lock()
+  }
+
+  _dropNearPlayer(itemId, count) {
+    const dir = new THREE.Vector3()
+    this.camera.getWorldDirection(dir)
+    const pos = this.camera.position.clone().add(dir.multiplyScalar(1.2))
+    pos.y -= 1
+    this.droppedItems.spawn(itemId, count, pos)
+  }
+
+  _giveOrDrop(itemId, count) {
+    const leftover = this.inventory.add(itemId, count, this.itemRegistry)
+    if (leftover > 0) this._dropNearPlayer(itemId, leftover)
+  }
+
+  _openChest(x, y, z) {
+    const items = this.chests.takeAll(this.currentDimension, x, y, z)
+    if (!items.length) {
+      this._showMsg('The chest is empty.')
+      return
+    }
+    const names = []
+    for (const it of items) {
+      this._giveOrDrop(it.itemId, it.count)
+      const item = this.itemRegistry.getItem(it.itemId)
+      names.push(`${it.count}x ${item?.name ?? it.itemId}`)
+    }
+    this.hud.showPickup(`Chest: ${names.join(', ')}`)
+    this.player.controls.unlock()
+    this.inventoryUI.show()
+  }
+
   update(dt) {
     if (this.state !== STATE.PLAYING) return
+
+    this.worldRenderer.streamAround(this.camera.position.x, this.camera.position.z)
 
     this.stats.update(dt)
     // Paused while in the Nether — no day/night there, and freezing the
@@ -544,10 +674,30 @@ export class Game {
     this._updateSunFollow()
     this.mobSpawner.update(dt)
     this.passiveSpawner.update(dt)
-    this.seaLife.update(dt)
-    this.farmingSystem.update(dt)
+    if (this.currentDimension !== 'nether') {
+      this.seaLife.update(dt)
+      this.farmingSystem.update(dt)
+    }
     this._updateMinimap(dt)
     this.droppedItems.update(dt, this.camera.position)
+
+    const witch = (this._bossList ?? []).find(b => b.config?.id === 'swamp_witch' || b.config?.name?.includes('Witch'))
+    if (witch && this.camera.position.distanceTo(witch.position) < 40) {
+      this.quests.noteVisit('swamp_witch')
+    }
+    this._oinkTimer -= dt
+    if (this._oinkTimer <= 0) {
+      const hostiles = [
+        ...this.mobSpawner.getMobs(),
+        ...(this.currentDimension === 'nether' ? [] : (this._activeBossList ?? [])),
+      ]
+      if (this.passiveSpawner.warnIfDanger(hostiles, this.camera.position)) {
+        sounds.playOink?.()
+        this._oinkTimer = 6
+      } else {
+        this._oinkTimer = 1
+      }
+    }
 
     if (!this.inventoryUI.visible && !this.craftingUI.visible) {
       this.player.update(dt)
@@ -626,7 +776,14 @@ export class Game {
       ...this.passiveSpawner.getMobs(),
       ...(this.currentDimension === 'nether' ? [] : this.seaLife.getMobs()),
     ]
-    this.minimap.update(dt, this.camera.position, yaw, mobs)
+    const markers = []
+    if (this.spawnPoint) markers.push({ x: this.spawnPoint.x, z: this.spawnPoint.z, color: '#66ccff' })
+    for (const boss of this._bossList ?? []) {
+      if (boss.dead) continue
+      const home = boss._homePos ?? boss.position
+      markers.push({ x: home.x, z: home.z, color: '#ff4444' })
+    }
+    this.minimap.update(dt, this.camera.position, yaw, mobs, markers)
   }
 
   _updateBlockOutline() {

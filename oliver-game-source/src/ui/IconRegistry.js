@@ -361,6 +361,16 @@ const SPECIAL = {
   witch_eye: drawEye,
   golem_core: drawGolemCore,
   summoning_stone: drawSummoningStone,
+  torch: (ctx) => {
+    cellRect(ctx, 7, 2, 2, 6, '#c8a050')
+    cellRect(ctx, 6, 1, 4, 3, '#ffaa22')
+    cellRect(ctx, 7, 0, 2, 2, '#fff0a0')
+  },
+  boat: (ctx) => {
+    cellRect(ctx, 2, 9, 12, 3, '#8b5a2b')
+    cellRect(ctx, 3, 8, 10, 2, '#a06a38')
+    cellRect(ctx, 7, 3, 2, 6, '#dddddd')
+  },
 }
 
 export function getItemIcon(item) {

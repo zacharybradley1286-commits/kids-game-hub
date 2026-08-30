@@ -9,7 +9,9 @@ export class HUD {
     this.breakFill   = document.getElementById('break-progress-fill')
     this.pickupFlash = document.getElementById('pickup-flash')
     this.minimap     = document.getElementById('minimap')
+    this.questPanel  = document.getElementById('quest-panel')
     this._flashTimeout = null
+    this._msgTimeout = null
   }
 
   show() {
@@ -17,6 +19,9 @@ export class HUD {
     this.crosshair.style.display = 'block'
     this.dayCounter.style.display = 'block'
     this.minimap.style.display = 'block'
+    if (this.questPanel) this.questPanel.style.display = 'block'
+    const vol = document.getElementById('vol-toggle')
+    if (vol) vol.style.display = 'block'
   }
 
   hide() {
@@ -24,6 +29,7 @@ export class HUD {
     this.crosshair.style.display = 'none'
     this.dayCounter.style.display = 'none'
     this.minimap.style.display = 'none'
+    if (this.questPanel) this.questPanel.style.display = 'none'
   }
 
   updateHealth(current, max) {
@@ -57,5 +63,22 @@ export class HUD {
     this._flashTimeout = setTimeout(() => {
       this.pickupFlash.style.opacity = '0'
     }, 1500)
+  }
+
+  toggleQuests() {
+    if (!this.questPanel) return
+    const on = this.questPanel.style.display !== 'none'
+    this.questPanel.style.display = on ? 'none' : 'block'
+  }
+
+  refreshQuests(quests) {
+    if (!this.questPanel) return
+    const rows = quests.list().map(q => {
+      const done = quests.done.has(q.id)
+      const p = quests.progress[q.id] ?? 0
+      const mark = done ? '✓' : `${p}/${q.target}`
+      return `<div class="quest-row${done ? ' done' : ''}"><b>${q.name}</b> <span>${mark}</span><div class="quest-desc">${q.desc}</div></div>`
+    }).join('')
+    this.questPanel.innerHTML = `<h3>Jobs (J)</h3>${rows}`
   }
 }

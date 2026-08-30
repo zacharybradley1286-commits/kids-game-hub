@@ -34,13 +34,22 @@ export class PlayerController {
     this._prevBob   = 0
     this._stepTimer = 0
     this._sprinting = false
+    this._attackCooldown = 0
+    this.mounted = false
+    this.boat = null  // { mesh, x, y, z }
+    this.onOpenChest = null
+    this.onSetSpawn = null
+    this.onOverflow = null
+    this.onPlanted = null
+    this.getDimension = () => 'overworld'
+    this.scene = null
 
     this._setupInputListeners(renderer)
 
     // Start at island center surface
     const sx = WORLD_W / 2
     const sz = WORLD_D / 2
-    const sy = worldData.surfaceY(sx, sz)
+    const sy = worldData.solidSurfaceY?.(sx, sz) ?? worldData.surfaceY(sx, sz)
     camera.position.set(sx + 0.5, (sy >= 0 ? sy : 12) + 1.8, sz + 0.5)
   }
 
@@ -73,8 +82,9 @@ export class PlayerController {
 
     window.addEventListener('mousedown', e => {
       if (!this.controls.isLocked) return
-      if (e.button === 0 && e.shiftKey) {
-        // Shift+click = right-click alternative (trackpad friendly)
+      if (e.button === 0 && (e.altKey || e.metaKey)) {
+        // Alt/Option+click = right-click alternative (trackpad friendly).
+        // Shift is sprint, so it must NOT steal mining.
         this._handleRightClick()
         return
       }
@@ -98,13 +108,28 @@ export class PlayerController {
     })
   }
 
+  occupies(bx, by, bz) {
+    const px = Math.floor(this.camera.position.x)
+    const pz = Math.floor(this.camera.position.z)
+    const feet = Math.floor(this.camera.position.y - 1.8)
+    const head = Math.floor(this.camera.position.y + 0.1)
+    return bx === px && bz === pz && by >= feet && by <= head
+  }
+
   update(dt) {
     if (!this.controls.isLocked) return
+    if (this._attackCooldown > 0) this._attackCooldown -= dt
 
-    // Sprint — hold Shift (the standard sprint key) or Ctrl
+    // Sprint — hold Shift. Ctrl still works; Shift is NOT "place".
     this._sprinting = this._keys['ShiftLeft'] || this._keys['ShiftRight'] ||
                        this._keys['ControlLeft'] || this._keys['ControlRight']
-    const speed = MOVE_SPEED * (this._sprinting ? 1.65 : 1.0)
+    const speed = MOVE_SPEED * (this._sprinting ? 1.65 : 1.0) * (this.mounted ? 1.8 : 1)
+
+    if (this.mounted && this.boat) {
+      this._updateBoat(dt, speed)
+      this._updateStation()
+      return
+    }
 
     // Movement
     const dir = new THREE.Vector3()
@@ -143,10 +168,8 @@ export class PlayerController {
     const fz = Math.floor(this.camera.position.z)
     const headY = Math.floor(this.camera.position.y - 0.5)
     const feetWY = Math.floor(this.camera.position.y - 1.6)
-    const inWater = this.worldData.getBlock?.(fx, feetWY, fz) === 14 ||
-                    this.worldData.getBlock?.(fx, headY,  fz) === 14 ||
-                    this.worldData.get(fx, feetWY, fz) === 14 ||
-                    this.worldData.get(fx, headY,  fz) === 14
+    const inWater = this.worldData.get(fx, feetWY, fz) === BLOCK.WATER ||
+                    this.worldData.get(fx, headY,  fz) === BLOCK.WATER
 
     // Lava check — Nether hazard, damages the player continuously on contact
     const inLava = this.worldData.get(fx, feetWY, fz) === BLOCK.LAVA ||
@@ -190,8 +213,23 @@ export class PlayerController {
       this._onGround = true
       this.camera.position.y = landedAt + 1 + 1.8
     } else {
-      this._onGround = inWater  // can "jump" off water surface
-      this.camera.position.y = Math.max(1.8, newY)
+      // Ceiling — don't jump through a solid block above the head
+      const oldHeadY = Math.floor(this.camera.position.y + 0.15)
+      const newHeadY = Math.floor(newY + 0.15)
+      let bonked = false
+      if (this._vy > 0) {
+        const minY = Math.min(oldHeadY, newHeadY)
+        const maxY = Math.max(oldHeadY, newHeadY)
+        for (let y = minY; y <= maxY; y++) {
+          if (this.worldData.isSolid(fx, y, fz)) { bonked = true; break }
+        }
+      }
+      if (bonked) {
+        this._vy = 0
+      } else {
+        this._onGround = inWater
+        this.camera.position.y = Math.max(1.8, newY)
+      }
     }
 
     // Clamp to world bounds
@@ -202,7 +240,7 @@ export class PlayerController {
     if (this.camera.position.y < 2) {
       const sx = WORLD_W / 2
       const sz = WORLD_D / 2
-      const sy = this.worldData.surfaceY(sx, sz)
+      const sy = this.worldData.solidSurfaceY?.(sx, sz) ?? this.worldData.surfaceY(sx, sz)
       this.camera.position.set(sx + 0.5, (sy >= 0 ? sy : 12) + 1.8, sz + 0.5)
       this._vy = 0
       this.stats.takeDamage(5)
@@ -310,6 +348,15 @@ export class PlayerController {
   _handleRightClick() {
     const heldItem = this._getHeldItem()
 
+    if (this.mounted) {
+      this._dismountBoat()
+      return
+    }
+    if (this.boat && this._nearBoat(3)) {
+      this._mountBoat()
+      return
+    }
+
     // Eat food — works even when not pointing at a block
     if (heldItem?.category === 'food' && this.stats.hunger < this.stats.maxHunger - 1) {
       this.stats.eat(heldItem.foodValue)
@@ -355,24 +402,26 @@ export class PlayerController {
     // Harvest crop (right-click on farmland)
     const harvest = this.farming.tryHarvest(hit.blockPos)
     if (harvest) {
-      this.inventory.add(harvest.itemId, harvest.count, this.itemRegistry)
+      this._give(harvest.itemId, harvest.count)
+      if (harvest.seedCount > 0) this._give(harvest.seedItem, harvest.seedCount)
       this.hud.showPickup(this.itemRegistry.getItem(harvest.itemId)?.name ?? harvest.itemId)
       return
     }
 
-    // Open chest
+    // Open chest — chest stays in the world; contents live in ChestSystem
     {
       const [bx, by, bz] = hit.blockPos
       if (this.worldData.get(bx, by, bz) === BLOCK.CHEST) {
-        this._openChest(bx, by, bz)
+        this.onOpenChest?.(bx, by, bz)
         return
       }
     }
 
-    // Sleep in bed
+    // Sleep in bed + set respawn
     {
       const [bx, by, bz] = hit.blockPos
       if (this.worldData.get(bx, by, bz) === BLOCK.BED) {
+        this.onSetSpawn?.({ x: bx + 0.5, y: by + 1.8, z: bz + 0.5 })
         this.onSleepInBed?.()
         return
       }
@@ -387,6 +436,17 @@ export class PlayerController {
       }
     }
 
+    // Place a raft on water
+    if (heldItem?.isBoat) {
+      const [ax, ay, az] = hit.adjacentPos
+      if (this.worldData.get(ax, ay, az) === BLOCK.WATER ||
+          this.worldData.get(ax, ay - 1, az) === BLOCK.WATER) {
+        this._placeBoat(ax + 0.5, (this.worldData.get(ax, ay, az) === BLOCK.WATER ? ay : ay - 1) + 0.2, az + 0.5)
+        this.inventory.removeSlot(this.inventory.hotbarIndex)
+        return
+      }
+    }
+
     // Place block
     if (heldItem?.blockId >= 0) {
       const placed = this.mining.placeBlock(hit.adjacentPos, heldItem.blockId)
@@ -397,85 +457,75 @@ export class PlayerController {
 
   }
 
-  _openChest(bx, by, bz) {
-    // Loot table: [itemId, minCount, maxCount, weight]
-    const LOOT_COMMON = [
-      ['bread',         2, 5,  30],
-      ['cooked_meat',   1, 4,  25],
-      ['iron_ore',      2, 6,  25],
-      ['stick',         4, 12, 20],
-      ['string',        2, 6,  18],
-      ['bone',          2, 5,  18],
-      ['cobblestone',   6, 16, 15],
-      ['planks',        4, 10, 15],
-      ['wheat_seed',    3, 8,  12],
-      ['carrot',        2, 6,  12],
-      ['carrot_seed',   2, 5,  10],
-      ['potato_seed',   2, 5,  10],
-      ['gravel',        4, 10, 10],
-    ]
-    const LOOT_UNCOMMON = [
-      ['iron_ingot',    2, 5,  40],
-      ['crystal_shard', 1, 2,  15],
-      ['stone_sword',   1, 1,  20],
-      ['stone_pickaxe', 1, 1,  18],
-      ['stone_axe',     1, 1,  18],
-      ['iron_pickaxe',  1, 1,   8],
-      ['iron_sword',    1, 1,   6],
-      ['glass',         2, 6,  12],
-    ]
-    const LOOT_RARE = [
-      ['crystal_shard', 2, 4,  40],
-      ['iron_ingot',    4, 8,  30],
-      ['iron_sword',    1, 1,  20],
-      ['iron_pickaxe',  1, 1,  18],
-      ['crystal_sword', 1, 1,   5],
-      ['bread',         3, 8,  20],
-    ]
+  _give(itemId, count) {
+    const leftover = this.inventory.add(itemId, count, this.itemRegistry)
+    if (leftover > 0) this.onOverflow?.(itemId, leftover)
+  }
 
-    // Pick tier based on rough distance from spawn (island centre)
-    const spawnCx = WORLD_W / 2, spawnCz = WORLD_D / 2
-    const dist = Math.sqrt((bx-spawnCx)**2 + (bz-spawnCz)**2)
-    const table = dist > 120*4 ? LOOT_RARE : dist > 60*4 ? LOOT_UNCOMMON : LOOT_COMMON
+  _placeBoat(x, y, z) {
+    this._removeBoatMesh()
+    const geo = new THREE.BoxGeometry(1.6, 0.25, 1.1)
+    const mat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.position.set(x, y, z)
+    this.scene?.add(mesh)
+    this.boat = { mesh, x, y, z }
+    this.hud.showPickup('Raft placed — right-click it to hop on')
+  }
 
-    // Roll 3–5 loot entries using weighted random
-    const rolls = 3 + Math.floor(Math.random() * 3)
-    const totalWeight = table.reduce((s, e) => s + e[3], 0)
-    const picked = []
-    const usedIds = new Set()
+  _removeBoatMesh() {
+    if (!this.boat) return
+    this.scene?.remove(this.boat.mesh)
+    this.boat.mesh.geometry.dispose()
+    this.boat.mesh.material.dispose()
+    this.boat = null
+    this.mounted = false
+  }
 
-    for (let roll = 0; roll < rolls; roll++) {
-      let r = Math.random() * totalWeight
-      for (const entry of table) {
-        r -= entry[3]
-        if (r <= 0 && !usedIds.has(entry[0])) {
-          picked.push(entry)
-          usedIds.add(entry[0])
-          break
-        }
-      }
+  _nearBoat(r) {
+    if (!this.boat) return false
+    const p = this.camera.position
+    const b = this.boat.mesh.position
+    return Math.hypot(p.x - b.x, p.z - b.z) < r
+  }
+
+  _mountBoat() {
+    this.mounted = true
+    this._vy = 0
+    this.hud.showPickup('Sailing — Space to hop off')
+  }
+
+  _dismountBoat() {
+    this.mounted = false
+    this.camera.position.y += 0.6
+    this.hud.showPickup('You hop off the raft')
+  }
+
+  _updateBoat(dt, speed) {
+    const dir = new THREE.Vector3()
+    if (this._keys['KeyW']) dir.z -= 1
+    if (this._keys['KeyS']) dir.z += 1
+    if (this._keys['KeyA']) dir.x -= 1
+    if (this._keys['KeyD']) dir.x += 1
+    if (this._keys['Space']) { this._dismountBoat(); return }
+    dir.normalize()
+    if (dir.length() > 0) {
+      this.controls.moveRight(dir.x * speed * dt)
+      this.controls.moveForward(-dir.z * speed * dt)
     }
-
-    // Give items and report them
-    const names = []
-    for (const [id, min, max] of picked) {
-      const count = min + Math.floor(Math.random() * (max - min + 1))
-      const added = this.inventory.add(id, count, this.itemRegistry)
-      if (added !== false) {
-        const item = this.itemRegistry.getItem(id)
-        names.push(`${count}x ${item?.name ?? id}`)
-      }
+    const fx = Math.floor(this.camera.position.x)
+    const fz = Math.floor(this.camera.position.z)
+    let waterY = -1
+    for (let y = WORLD_H - 1; y >= 0; y--) {
+      if (this.worldData.get(fx, y, fz) === BLOCK.WATER) { waterY = y; break }
     }
-
-    // Remove chest from world
-    this.worldData.set(bx, by, bz, BLOCK.AIR)
-    const cx = Math.floor(bx / 16)
-    const cz2 = Math.floor(bz / 16)
-    this.worldRenderer.rebuildChunk(cx, cz2)
-
-    // Play sound and show message
-    sounds.playBlockBreak()
-    this.hud.showPickup(names.length ? `📦 Chest: ${names.join(', ')}` : '📦 Chest was empty')
+    if (waterY < 0) { this._dismountBoat(); return }
+    this.camera.position.y = waterY + 1.5
+    this.camera.position.x = Math.max(0.5, Math.min(WORLD_W - 0.5, this.camera.position.x))
+    this.camera.position.z = Math.max(0.5, Math.min(WORLD_D - 0.5, this.camera.position.z))
+    if (this.boat) {
+      this.boat.mesh.position.set(this.camera.position.x, waterY + 0.2, this.camera.position.z)
+    }
   }
 
   _getHeldItem() {
@@ -533,17 +583,20 @@ export class PlayerController {
   setupAttackListener(getMobsAndBosses) {
     window.addEventListener('mousedown', (e) => {
       if (!this.controls.isLocked || e.button !== 0) return
+      if (this._attackCooldown > 0) return
       const heldItem = this._getHeldItem()
-      if (!heldItem?.isSword && !heldItem?.isAxe) return
+      const damage = heldItem?.isSword || heldItem?.isAxe
+        ? heldItem.damage
+        : 1.5  // fists
       const allMobs = getMobsAndBosses()
       const camPos = this.camera.position
       for (const mob of allMobs) {
         if (!mob.dead) {
           const dist = mob.position.distanceTo(camPos)
           if (dist < 4) {
-            mob.takeDamage(heldItem.damage)
-            // Update player tier
-            this.stats.updateTier(heldItem)
+            mob.takeDamage(damage)
+            this._attackCooldown = 0.4
+            if (heldItem) this.stats.updateTier(heldItem)
             break
           }
         }

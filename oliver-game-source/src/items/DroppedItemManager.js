@@ -71,8 +71,14 @@ export class DroppedItemManager {
       const horizDist = Math.hypot(dx, dz)
       const withinHeight = Math.abs(it.position.y - (playerPos.y - 1.8)) < 2.2
       const pickedUp = horizDist < PICKUP_RADIUS && withinHeight
-      if (pickedUp || it.age > DESPAWN_TIME) {
-        if (pickedUp) this.inventory.add(it.itemId, it.count, this.itemRegistry)
+      if (it.age > DESPAWN_TIME) {
+        it.dispose()
+        this.items.splice(i, 1)
+        continue
+      }
+      if (pickedUp) {
+        const leftover = this.inventory.add(it.itemId, it.count, this.itemRegistry)
+        if (leftover > 0) { it.count = leftover; continue }
         it.dispose()
         this.items.splice(i, 1)
       }
