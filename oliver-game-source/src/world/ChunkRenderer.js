@@ -29,12 +29,14 @@ const FACE_VERTS = [
 ]
 
 export class ChunkRenderer {
-  constructor(cx, cz, worldData, material) {
+  constructor(cx, cz, worldData, material, waterMaterial) {
     this.cx = cx
     this.cz = cz
     this.worldData = worldData
     this.material = material
+    this.waterMaterial = waterMaterial
     this.mesh = null
+    this.waterMesh = null
     this.build()
   }
 
@@ -44,6 +46,16 @@ export class ChunkRenderer {
     const uvs       = []
     const indices   = []
     let vertCount = 0
+
+    // Water gets its own geometry/material (transparent, no alphaTest) so
+    // it can render as translucent instead of sharing the opaque terrain
+    // material — mixing an alpha-blended surface into an alphaTest-only
+    // mesh would make it either fully opaque or invisible.
+    const waterPositions = []
+    const waterNormals   = []
+    const waterUVs        = []
+    const waterIndices   = []
+    let waterVertCount = 0
 
     const ox = this.cx * CHUNK_W
     const oz = this.cz * CHUNK_W
@@ -57,16 +69,23 @@ export class ChunkRenderer {
           if (blockId === BLOCK.AIR) continue
           const block = BLOCK_DB[blockId]
           if (!block || !block.isSolid && !block.isTransparent) continue
-          if (!block.isSolid) continue  // skip non-solid transparent (water)
+
+          const isWater = blockId === BLOCK.WATER
+          if (!block.isSolid && !isWater) continue  // skip other non-solid transparent blocks
 
           for (let fi = 0; fi < 6; fi++) {
             const face = FACES[fi]
             const nx = wx + face.dir[0]
             const ny = y  + face.dir[1]
             const nz = wz + face.dir[2]
-            const neighbor = BLOCK_DB[this.worldData.get(nx, ny, nz)]
+            const neighborId = this.worldData.get(nx, ny, nz)
+            const neighbor = BLOCK_DB[neighborId]
 
-            // Only draw face if neighbor is transparent/air
+            // Only draw face if neighbor is transparent/air. Water only
+            // needs its top face (and side faces against air) — skip faces
+            // against another water block so a pond doesn't render internal
+            // walls between its own cells.
+            if (isWater && neighborId === BLOCK.WATER) continue
             const neighborTransparent = !neighbor || !neighbor.isSolid || neighbor.isTransparent
             if (!neighborTransparent) continue
 
@@ -80,16 +99,25 @@ export class ChunkRenderer {
             ]
 
             const verts = FACE_VERTS[fi]
-            const base = vertCount
+            const posArr = isWater ? waterPositions : positions
+            const normArr = isWater ? waterNormals : normals
+            const uvArr = isWater ? waterUVs : uvs
+            const idxArr = isWater ? waterIndices : indices
+            const base = isWater ? waterVertCount : vertCount
             for (let vi = 0; vi < 4; vi++) {
               const v = verts[vi]
-              positions.push(lx + v[0], y + v[1], lz + v[2])
-              normals.push(...face.normal)
-              uvs.push(faceUVs[vi][0], faceUVs[vi][1])
+              // Water's top face sits a little below the full block height
+              // so it visually reads as a surface, not a solid cube flush
+              // with the surrounding bank.
+              const vy = (isWater && v[1] === 1) ? 0.9 : v[1]
+              posArr.push(lx + v[0], y + vy, lz + v[2])
+              normArr.push(...face.normal)
+              uvArr.push(faceUVs[vi][0], faceUVs[vi][1])
             }
             // Two triangles: 0,1,2 and 0,2,3
-            indices.push(base, base+1, base+2, base, base+2, base+3)
-            vertCount += 4
+            idxArr.push(base, base+1, base+2, base, base+2, base+3)
+            if (isWater) waterVertCount += 4
+            else vertCount += 4
           }
         }
       }
@@ -99,25 +127,42 @@ export class ChunkRenderer {
       this.mesh.geometry.dispose()
       this.mesh.parent?.remove(this.mesh)
     }
+    if (this.waterMesh) {
+      this.waterMesh.geometry.dispose()
+      this.waterMesh.parent?.remove(this.waterMesh)
+    }
 
     if (vertCount === 0) {
       this.mesh = null
-      return
+    } else {
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      geo.setAttribute('normal',   new THREE.Float32BufferAttribute(normals,   3))
+      geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs,       2))
+      geo.setIndex(indices)
+      geo.computeBoundingBox()
+
+      // Terrain does not cast/receive dynamic shadows: with 144 chunks always
+      // resident, shadow-casting geometry at this scale dominates frame time
+      // (full-world shadow pass every frame). Fog + ambient/directional fill
+      // light keep the scene readable without it.
+      this.mesh = new THREE.Mesh(geo, this.material)
+      this.mesh.position.set(this.cx * CHUNK_W, 0, this.cz * CHUNK_W)
     }
 
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    geo.setAttribute('normal',   new THREE.Float32BufferAttribute(normals,   3))
-    geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs,       2))
-    geo.setIndex(indices)
-    geo.computeBoundingBox()
+    if (waterVertCount === 0) {
+      this.waterMesh = null
+    } else {
+      const waterGeo = new THREE.BufferGeometry()
+      waterGeo.setAttribute('position', new THREE.Float32BufferAttribute(waterPositions, 3))
+      waterGeo.setAttribute('normal',   new THREE.Float32BufferAttribute(waterNormals,   3))
+      waterGeo.setAttribute('uv',       new THREE.Float32BufferAttribute(waterUVs,       2))
+      waterGeo.setIndex(waterIndices)
+      waterGeo.computeBoundingBox()
 
-    // Terrain does not cast/receive dynamic shadows: with 144 chunks always
-    // resident, shadow-casting geometry at this scale dominates frame time
-    // (full-world shadow pass every frame). Fog + ambient/directional fill
-    // light keep the scene readable without it.
-    this.mesh = new THREE.Mesh(geo, this.material)
-    this.mesh.position.set(this.cx * CHUNK_W, 0, this.cz * CHUNK_W)
+      this.waterMesh = new THREE.Mesh(waterGeo, this.waterMaterial)
+      this.waterMesh.position.set(this.cx * CHUNK_W, 0, this.cz * CHUNK_W)
+    }
   }
 
   dispose() {
@@ -125,6 +170,11 @@ export class ChunkRenderer {
       this.mesh.geometry.dispose()
       this.mesh.parent?.remove(this.mesh)
       this.mesh = null
+    }
+    if (this.waterMesh) {
+      this.waterMesh.geometry.dispose()
+      this.waterMesh.parent?.remove(this.waterMesh)
+      this.waterMesh = null
     }
   }
 }
